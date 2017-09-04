@@ -16,14 +16,4 @@ RUN apt-get update && \
         wget \
         build-essential
 
-# create ``student`` user for container with password ``student``
-RUN useradd -m student && \
-    echo student:student | chpasswd
-
-# create ``student-root`` user for container with pswd ``student-root``
-RUN useradd -m student-root && \
-    echo student-root:student-root | chpasswd && \
-    echo 'student-root ALL=(root) ALL' >> /etc/sudoers
-
-USER student
 WORKDIR /home/student

@@ -3,3 +3,4 @@ app:
   volumes:
     - .:/home/student
   tty: true
+  privileged: true

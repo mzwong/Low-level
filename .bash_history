@@ -328,3 +328,11 @@ ps
 ls
 make
 ./msh
+ls
+cd 1_bash/
+ls
+gdb msh
+gdb
+gbd
+gdb
+ls
