@@ -1,0 +1,3 @@
+Run with:
+docker-compose up
+docker exec -it cs4414_app_1 /bin/bash

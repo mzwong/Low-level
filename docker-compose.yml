@@ -1,0 +1,5 @@
+app:
+  build: .
+  volumes:
+    - .:/home/student
+  tty: true
