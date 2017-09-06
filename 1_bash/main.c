@@ -1,3 +1,4 @@
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +31,7 @@ int isValidToken(char token[]);
 int isValidWordChar(char c);
 tok_group_list parseTokens(tok_list tokens_list);
 tok_list readArgs(tok_list token_list, int *tok_iter);
+void openFiles(tok_group group);
 int isOpString(char *str);
 pid_t* runCommands(tok_group_list groups);
 int strEqual(char *str1, char *str2);
@@ -289,6 +291,7 @@ pid_t* runCommands(tok_group_list groups) {
         tok_group group = groups.groups[i];
         char command[1024 + strlen(group.command)];
         if (pid == 0) {
+            openFiles(group);
             if (group.command[0] != '/') {
                 getcwd(command, 1024);
                 strcat(command, "/");
@@ -311,6 +314,19 @@ pid_t* runCommands(tok_group_list groups) {
         printf("%d\n", statuses[i]);
     }
     return pids;
+}
+
+void openFiles(tok_group group) {
+    int in, out;
+    if (group.input_redirect) {
+        in = open(group.input_file, O_RDONLY);
+        dup2(in, STDIN_FILENO);
+    }
+    if (group.output_redirect) {
+        mode_t mode_rights = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+        out = open(group.output_file, O_WRONLY | O_CREAT, mode_rights);
+        dup2(out, STDOUT_FILENO);
+    }
 }
 
 int isOpString(char *str) {
