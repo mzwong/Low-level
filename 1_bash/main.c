@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,9 +32,11 @@ int isValidToken(char token[]);
 int isValidWordChar(char c);
 tok_group_list parseTokens(tok_list tokens_list);
 tok_list readArgs(tok_list token_list, int *tok_iter);
-void openFiles(tok_group group);
+int** createPipes(int num);
+void destroyPipes(int** pfds, int num);
+int openFiles(tok_group group);
 int isOpString(char *str);
-pid_t* runCommands(tok_group_list groups);
+void runCommands(tok_group_list groups);
 int strEqual(char *str1, char *str2);
 void freeMemory(tok_list tokens, tok_group_list groups);
 
@@ -44,13 +47,13 @@ int main() {
         // read a line
         int lineStatus = readLine(line);
         if (!lineStatus) {
-            printf("Error lexing line. Skipping line1\n");
+            printf("Error lexing line. Skipping line\n");
             continue;
         }
         // separate line into tokens
         tok_list token_list = tokenizeLine(line);
         if (token_list.tokens == NULL && token_list.size != 0) {
-            printf("Error lexing line. Skipping line2\n");
+            printf("Error lexing line. Skipping line\n");
             continue;
         }
         // parse into commands:
@@ -60,7 +63,7 @@ int main() {
             continue;
         }
         // run commands
-        pid_t *processes = runCommands(groups);
+        runCommands(groups);
 
         freeMemory(token_list, groups);
     }
@@ -77,7 +80,15 @@ int readLine(char line[]) {
     // read up until MAXCHAR
     for (int i = 0; i < MAXCHAR; i++) {
         c = getchar();
-        if (c == '\n' || c == EOF) {
+        if (c == EOF) {
+            if (i == 0) {
+                exit(0);
+            } else {
+                printf("Error, EOF detected in a line");
+                exit(1);
+            }
+        }
+        if (c == '\n') {
             line[i] = '\0';
             return 1;
         }
@@ -87,7 +98,11 @@ int readLine(char line[]) {
     // Max char exceeded, consume all char until end of line:
     while (1) {
         c = getchar();
-        if (c == '\n' || c == EOF)
+        if (c == EOF) {
+            printf("Error, EOF detected in line");
+            exit(1);
+        }
+        if (c == '\n')
             return 0;
     }
 }
@@ -137,8 +152,9 @@ tok_list tokenizeLine(char line[]) {
 int isValidToken(char token[]) {
     int len = strlen(token);
     // check if it's an operator:
-    if (len == 1 && (token[0] == '<' || token[0] == '>' || token[0] == '|'))
+    if (len == 1 && (token[0] == '<' || token[0] == '>' || token[0] == '|')) {
         return 1;
+    }
     //check if it's a word
     int isWord = 1;
     for (int i = 0; i < len; i++) {
@@ -155,7 +171,7 @@ int isValidWordChar(char c) {
         return 1;
     if (c >= 'A' && c <= 'Z')
         return 1;
-    if (c >= 0 && c <= 9)
+    if (c >= '0' && c <= '9')
         return 1;
     if (c == '.' || c == '-' || c == '/' || c == '_')
         return 1;
@@ -193,12 +209,11 @@ tok_group_list parseTokens(tok_list tokens_list) {
         group.args = readArgs(tokens_list, &tok_iter);
         // handle redirects and check valid redirect syntax
         while (tok_iter < tokens_list.size && !strEqual(tokens[tok_iter], "|")) {
-            if (strEqual(tokens[tok_iter], "<")) {
+            if (strEqual(tokens[tok_iter], "<") && !group.output_redirect) {
                 group.input_redirect = 1;
                 tok_iter++;
                 // parse error if file name is not a word or end of group
                 if (tok_iter >= tokens_list.size || isOpString(tokens[tok_iter])) {
-                    printf("op_command_error");
                     parse_error = 1;
                     break;
                 }
@@ -210,14 +225,12 @@ tok_group_list parseTokens(tok_list tokens_list) {
                 tok_iter++;
                 // parse error if file name is not a word
                 if (tok_iter >= tokens_list.size || isOpString(tokens[tok_iter])) {
-                    printf("op_file_error");
                     parse_error = 1;
                     break;
                 }
                 group.output_file = tokens[tok_iter];
                 tok_iter++;
             } else {
-                printf("unknown error");
                 parse_error = 1;
                 break;
             }
@@ -282,16 +295,37 @@ tok_list readArgs(tok_list tokens_list, int *tok_iter) {
     return args;
 }
 
-pid_t* runCommands(tok_group_list groups) {
-    pid_t pids[groups.size];
+/**
+ * Runs each command and handles pipes/file redirects.
+ * Prints status codes.
+ */
+void runCommands(tok_group_list groups) {
+    pid_t pids[groups.size - 1];
+    int **pfds = createPipes(groups.size);
     for (int i = 0; i < groups.size; i++) {
-        // int fds[2];
-        // pipe(fds);
+        if (strEqual(groups.groups[i].command, "exit")) {
+            exit(0);
+        }
         pid_t pid = fork();
         tok_group group = groups.groups[i];
         char command[1024 + strlen(group.command)];
-        if (pid == 0) {
-            openFiles(group);
+        if (pid == 0) { // child process
+            if (openFiles(group) < 0) {
+                destroyPipes(pfds, groups.size - 1);
+                return;
+            };
+            // setup writing to pipe
+            if (i < groups.size - 1) {
+                dup2(pfds[i][1], STDOUT_FILENO);
+                close(pfds[i][0]);
+                close(pfds[i][1]);
+            }
+            //setup reading from pipe:
+            if (i > 0) {
+                dup2(pfds[i-1][0], STDIN_FILENO);
+                close(pfds[i-1][0]);
+                close(pfds[i-1][1]);
+            }
             if (group.command[0] != '/') {
                 getcwd(command, 1024);
                 strcat(command, "/");
@@ -301,42 +335,89 @@ pid_t* runCommands(tok_group_list groups) {
             }
             int error = execve(command, group.args.tokens, 0);
             if (error == -1) {
-                printf("error occcured");
-                exit(1);
+                exit(errno);
             }
-        } else {
+        } else { // parent process
             pids[i] = pid;
         }
     }
     int statuses[groups.size];
+    destroyPipes(pfds, groups.size - 1);
     for (int i = 0; i < groups.size; i++) {
         waitpid(pids[i], &statuses[i], 0);
-        printf("%d\n", statuses[i]);
+        fprintf(stderr, "%d\n", WEXITSTATUS(statuses[i]));
     }
-    return pids;
 }
 
-void openFiles(tok_group group) {
+/**
+ * Allocate memory for pipe file descriptors
+ */
+int** createPipes(int num) {
+    int **pfds = malloc(num * sizeof(int*));
+    for (int i = 0; i < num; i++) {
+        pfds[i] = malloc(2 * sizeof(int));
+        pipe(pfds[i]);
+    }
+    return pfds;
+}
+
+/**
+ * Close pipe file descriptors and free memory holding them
+ */
+void destroyPipes(int** pfds, int num) {
+    for (int i = 0; i < num; i++) {
+        if (i < num) {
+            close(pfds[i][0]);
+            close(pfds[i][1]);
+            free(pfds[i]);
+        }
+    }
+    free(pfds);
+}
+
+/**
+ * Opens files for reading and writing STDIN and STDOUT
+ * returns -1 if there's an error opening files, 0 if ok
+ */
+int openFiles(tok_group group) {
     int in, out;
     if (group.input_redirect) {
         in = open(group.input_file, O_RDONLY);
+        if (in < 0) {
+            return -1;
+        }
         dup2(in, STDIN_FILENO);
+        close(in);
     }
     if (group.output_redirect) {
         mode_t mode_rights = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-        out = open(group.output_file, O_WRONLY | O_CREAT, mode_rights);
+        out = open(group.output_file, O_WRONLY | O_TRUNC | O_CREAT, mode_rights);
+        if (out < 0) {
+            return -1;
+        }
         dup2(out, STDOUT_FILENO);
+        close(out);
     }
+    return 0;
 }
 
+/**
+ * Checks if a string is a operator string
+ */
 int isOpString(char *str) {
     return strEqual(str, "<") || strEqual(str, ">") || strEqual(str, "|");
 }
 
+/**
+ * Returns a boolean int (0 or 1) to check string equality
+ */
 int strEqual(char *str1, char *str2) {
     return strcmp(str1, str2) == 0;
 }
 
+/**
+ * Frees allocated memory related to tokens and groups
+ */
 void freeMemory(tok_list tokens, tok_group_list groups) {
     for (int i = 0; i < tokens.size; i++) {
         free(tokens.tokens[i]);
