@@ -1,0 +1,4 @@
+1_bash/*
+
+!1_bash/main.c
+!1_bash/Makefile
