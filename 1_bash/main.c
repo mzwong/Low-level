@@ -76,9 +76,9 @@ int main() {
  * 0 if number of characters was too great
  */
 int readLine(char line[]) {
-    int c;
+    int c, i;
     // read up until MAXCHAR
-    for (int i = 0; i < MAXCHAR; i++) {
+    for (i = 0; i < MAXCHAR; i++) {
         c = getchar();
         if (c == EOF) {
             if (i == 0) {
@@ -133,7 +133,8 @@ tok_list tokenizeLine(char line[]) {
     tok_list tokens;
     if (invalidTokenFound) {
         // deallocate unused memory
-        for (int i = 0; i < numTokens; i++) {
+        int i = 0;
+        for (i = 0; i < numTokens; i++) {
             free(results[i]);
         }
         free(results);
@@ -157,7 +158,8 @@ int isValidToken(char token[]) {
     }
     //check if it's a word
     int isWord = 1;
-    for (int i = 0; i < len; i++) {
+    int i;
+    for (i = 0; i < len; i++) {
         isWord &= isValidWordChar(token[i]);
     }
     return isWord;
@@ -185,7 +187,8 @@ tok_group_list parseTokens(tok_list tokens_list) {
     char **tokens = tokens_list.tokens;
     // count max number of groups (num of "|" + 1);
     int numGroups = 1;
-    for (int i = 0; i < tokens_list.size; i++) {
+    int i;
+    for (i = 0; i < tokens_list.size; i++) {
         if (strEqual("|", tokens[i]))
             numGroups++;
     }
@@ -255,7 +258,7 @@ tok_group_list parseTokens(tok_list tokens_list) {
     tok_group_list result;
     if (parse_error) {
         // deallocate unused memory
-        for (int i = 0; i < group_iter; i++) {
+        for (i = 0; i < group_iter; i++) {
             free(groups[i].args.tokens);
         }
         free(groups);
@@ -287,7 +290,8 @@ tok_list readArgs(tok_list tokens_list, int *tok_iter) {
     }
     // +1 for extra NULL terminator
     args.tokens = malloc((arg_count + 1) * sizeof(char*));
-    for (int i = 0; i < arg_count; i++) {
+    int i;
+    for (i = 0; i < arg_count; i++) {
         args.tokens[i] = tokens[*tok_iter - arg_count + i];
     }
     args.tokens[arg_count] = NULL;
@@ -302,7 +306,8 @@ tok_list readArgs(tok_list tokens_list, int *tok_iter) {
 void runCommands(tok_group_list groups) {
     pid_t pids[groups.size - 1];
     int **pfds = createPipes(groups.size);
-    for (int i = 0; i < groups.size; i++) {
+    int i;
+    for (i = 0; i < groups.size; i++) {
         if (strEqual(groups.groups[i].command, "exit")) {
             exit(0);
         }
@@ -333,7 +338,8 @@ void runCommands(tok_group_list groups) {
             } else {
                 strcpy(command, group.command);
             }
-            int error = execve(command, group.args.tokens, 0);
+	    char *const env[] = {"TERM=xterm", 0};
+            int error = execve(command, group.args.tokens, env);
             if (error == -1) {
                 exit(errno);
             }
@@ -343,7 +349,7 @@ void runCommands(tok_group_list groups) {
     }
     int statuses[groups.size];
     destroyPipes(pfds, groups.size - 1);
-    for (int i = 0; i < groups.size; i++) {
+    for (i = 0; i < groups.size; i++) {
         waitpid(pids[i], &statuses[i], 0);
         fprintf(stderr, "%d\n", WEXITSTATUS(statuses[i]));
     }
@@ -354,7 +360,8 @@ void runCommands(tok_group_list groups) {
  */
 int** createPipes(int num) {
     int **pfds = malloc(num * sizeof(int*));
-    for (int i = 0; i < num; i++) {
+    int i;
+    for (i = 0; i < num; i++) {
         pfds[i] = malloc(2 * sizeof(int));
         pipe(pfds[i]);
     }
@@ -365,7 +372,8 @@ int** createPipes(int num) {
  * Close pipe file descriptors and free memory holding them
  */
 void destroyPipes(int** pfds, int num) {
-    for (int i = 0; i < num; i++) {
+    int i;
+    for (i = 0; i < num; i++) {
         if (i < num) {
             close(pfds[i][0]);
             close(pfds[i][1]);
@@ -419,11 +427,12 @@ int strEqual(char *str1, char *str2) {
  * Frees allocated memory related to tokens and groups
  */
 void freeMemory(tok_list tokens, tok_group_list groups) {
-    for (int i = 0; i < tokens.size; i++) {
+    int i;
+    for (i = 0; i < tokens.size; i++) {
         free(tokens.tokens[i]);
     }
     free(tokens.tokens);
-    for (int i = 0; i < groups.size; i++) {
+    for (i = 0; i < groups.size; i++) {
         free(groups.groups[i].args.tokens);
     }
     free(groups.groups);
