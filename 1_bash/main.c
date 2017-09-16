@@ -44,6 +44,7 @@ int main() {
     char line[MAXCHAR + 1]; // +1 for \0
     while (1) {
         printf(">");
+	fflush(stdout);
         // read a line
         int lineStatus = readLine(line);
         if (!lineStatus) {
