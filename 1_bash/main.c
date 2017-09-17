@@ -1,3 +1,18 @@
+/**
+ * Homework 1: Writing Your Own Shell
+ *
+ * CS4414 Operating Systems
+ * Fall 2017
+ *
+ * Maurice Wong - mzw7af
+ *
+ * main.c - shell program
+ *
+ * COMPILE:     make
+ * OBJECTS:     main.o
+ * RUN:         ./msh
+ */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -339,20 +354,34 @@ void runCommands(tok_group_list groups) {
             } else {
                 strcpy(command, group.command);
             }
-	    char *const env[] = {"TERM=xterm", 0};
+            char *const env[] = {"TERM=xterm", 0};
             int error = execve(command, group.args.tokens, env);
             if (error == -1) {
                 exit(errno);
             }
         } else { // parent process
             pids[i] = pid;
+            if (i < groups.size - 1) {
+                close(pfds[i][1]);
+            }
+            if (i > 0) {
+                close(pfds[i-1][0]);
+                close(pfds[i-1][1]);
+            }
         }
     }
     int statuses[groups.size];
     destroyPipes(pfds, groups.size - 1);
     for (i = 0; i < groups.size; i++) {
         waitpid(pids[i], &statuses[i], 0);
-        fprintf(stderr, "%d\n", WEXITSTATUS(statuses[i]));
+        int exitCode = WEXITSTATUS(statuses[i]);
+        char *command = groups.groups[i].command;
+        fprintf(stderr, "%d\n", exitCode);
+        if (exitCode == ENOENT) {
+            printf("Command %s failed to execute\n", command);
+        } else {
+            printf("%s exited with exit code %d\n", command, exitCode);
+        }
     }
 }
 
@@ -370,14 +399,12 @@ int** createPipes(int num) {
 }
 
 /**
- * Close pipe file descriptors and free memory holding them
+ * free memory holding pipe file descriptors
  */
 void destroyPipes(int** pfds, int num) {
     int i;
     for (i = 0; i < num; i++) {
         if (i < num) {
-            close(pfds[i][0]);
-            close(pfds[i][1]);
             free(pfds[i]);
         }
     }
