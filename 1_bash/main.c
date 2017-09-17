@@ -333,7 +333,8 @@ void runCommands(tok_group_list groups) {
         if (pid == 0) { // child process
             if (openFiles(group) < 0) {
                 destroyPipes(pfds, groups.size - 1);
-                return;
+                printf("Error, file could not be opened\n");
+                exit(1);
             };
             // setup writing to pipe
             if (i < groups.size - 1) {
