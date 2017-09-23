@@ -13,22 +13,29 @@
  * RUN:         ./max
  */
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 int readNums(int* nums, int len);
+void createThreads(pthread_t *tids);
 
 int main() {
+    // read in nums from stdin
     int len = 8092;
     int* nums = malloc(len * sizeof(int));
     int numCount = readNums(nums, len);
 
-    int i = 0;
-    for (; i < numCount; i++) {
-        printf("%d", nums[i]);
+    // create threads
+    int numThreads = numCount / 2;
+    int i;
+    pthread_t tids[numThreads];
+    pthread_attr attr;
+    pthread_attr_init(&attr);
+    for (i = 0; i < numThreads; i++) {
+        pthread_create(tids)
     }
+    free(nums);
     return 0;
 }
 
