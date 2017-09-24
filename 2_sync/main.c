@@ -19,7 +19,16 @@
 #include <stdlib.h>
 
 int readNums(int* nums, int len);
-void createThreads(pthread_t *tids);
+void* max(void *v);
+
+/**
+ * Args struct for thread function
+ */
+typedef struct argstruct {
+    int tid;
+    int *nums;
+    barrier b;
+} argstruct;
 
 int main() {
     // read in nums from stdin
@@ -29,12 +38,28 @@ int main() {
 
     // create threads
     int numThreads = numCount / 2;
-    int i;
     pthread_t tids[numThreads];
-    pthread_attr attr;
+    argstruct args[numThreads];
+
+    pthread_attr_t attr;
     pthread_attr_init(&attr);
+    int i;
+
+    barrier b;
+    initBarrier(b, numThreads);
+    // setup argstructs:
     for (i = 0; i < numThreads; i++) {
-        pthread_create(tids)
+        args[i].tid = i;
+        args[i].nums = nums;
+        args[i].b = b;
+    }
+    for (i = 0; i < numThreads; i++) {
+        printf("here we go %d\n", i);
+        pthread_create(&tids[i], &attr, max, &args[i]);
+    }
+
+    for (i = 0; i < numThreads; i++) {
+        pthread_join(tids[i], NULL);
     }
     free(nums);
     return 0;
@@ -56,4 +81,18 @@ int readNums(int *nums, int len) {
         numCount++;
     }
     return numCount;
+}
+
+/**
+ * Thread function to calculate the max of two numbers
+ */
+void* max(void *v) {
+    printf("STARING HERE\n");
+    int i;
+    argstruct *a = (argstruct *) v;
+    for (i = 0; i < 3; i++) {
+        printf("YES\n");
+        waitBarrier(a->b);
+    }
+    pthread_exit(NULL);
 }
