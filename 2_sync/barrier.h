@@ -10,7 +10,7 @@ typedef struct barrier {
     sem_t mutex;
 } barrier;
 
-void initBarrier(barrier b, int size);
-void waitBarrier(barrier b);
+void initBarrier(barrier *b, int size);
+void waitBarrier(barrier *b);
 
 #endif

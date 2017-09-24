@@ -27,7 +27,7 @@ void* max(void *v);
 typedef struct argstruct {
     int tid;
     int *nums;
-    barrier b;
+    barrier *b;
 } argstruct;
 
 int main() {
@@ -46,12 +46,12 @@ int main() {
     int i;
 
     barrier b;
-    initBarrier(b, numThreads);
+    initBarrier(&b, numThreads);
     // setup argstructs:
     for (i = 0; i < numThreads; i++) {
         args[i].tid = i;
         args[i].nums = nums;
-        args[i].b = b;
+        args[i].b = &b;
     }
     for (i = 0; i < numThreads; i++) {
         printf("here we go %d\n", i);
