@@ -91,7 +91,6 @@ void* max(void *v) {
     int i;
     argstruct *a = (argstruct *) v;
     for (i = 0; i < 3; i++) {
-        printf("YES\n");
         waitBarrier(a->b);
     }
     pthread_exit(NULL);
