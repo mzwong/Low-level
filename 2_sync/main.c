@@ -87,7 +87,15 @@ int readNums(int *nums, int len) {
 }
 
 /**
- * Thread function to calculate the max of two numbers
+ * Thread function to calculate the max of two numbers:
+ *
+ * In the nums array, 2 spots are designated as input for thread i:
+ * 2*i and 2*i + 1
+ * The upper half of threads is rendered inactive on each round.
+ * Active threads will write their result to 2*i to continue with.
+ * Inactive threads will write their result to 2*i - n + 1,
+ * where n = num of active threads. This places the next round of active numbers
+ * into the lower half of nums.
  */
 void* max(void *v) {
     argstruct *a = (argstruct *) v;
