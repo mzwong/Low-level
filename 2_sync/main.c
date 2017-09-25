@@ -26,8 +26,10 @@ void* max(void *v);
  */
 typedef struct argstruct {
     int tid;
+    int numThreads;
     int *nums;
     barrier *b;
+    int result;
 } argstruct;
 
 int main() {
@@ -51,16 +53,17 @@ int main() {
     for (i = 0; i < numThreads; i++) {
         args[i].tid = i;
         args[i].nums = nums;
+        args[i].numThreads = numThreads;
         args[i].b = &b;
     }
     for (i = 0; i < numThreads; i++) {
-        printf("here we go %d\n", i);
         pthread_create(&tids[i], &attr, max, &args[i]);
     }
 
     for (i = 0; i < numThreads; i++) {
         pthread_join(tids[i], NULL);
     }
+    printf("%d\n", args[0].result);
     free(nums);
     return 0;
 }
@@ -72,7 +75,7 @@ int main() {
 int readNums(int *nums, int len) {
     char line[1024];
     int numCount = 0;
-    while (fgets(line, 1024, stdin)[0] != '\n') {
+    while (fgets(line, 1024, stdin) != NULL && line[0] != '\n') {
         if (numCount == len) {
             len *= 2;
             nums = realloc(nums, len * sizeof(int));
@@ -87,11 +90,32 @@ int readNums(int *nums, int len) {
  * Thread function to calculate the max of two numbers
  */
 void* max(void *v) {
-    printf("STARING HERE\n");
-    int i;
     argstruct *a = (argstruct *) v;
-    for (i = 0; i < 3; i++) {
-        waitBarrier(a->b);
+    int threadCount = a->numThreads;
+    int firstNum, secondNum, max;
+    while (threadCount >= 1) {
+        int tid = a->tid;
+        if (tid < threadCount) {
+            // thread is active, compare max
+            firstNum = a->nums[tid * 2];
+            secondNum = a->nums[(tid * 2) + 1];
+            max = firstNum > secondNum ? firstNum : secondNum;
+            waitBarrier(a->b);
+            if (tid < threadCount >> 1) {
+                // thread active on next round
+                a->nums[2 * tid] = max;
+            } else {
+                // thread is inactive on next round
+                a->nums[(2*tid) - threadCount + 1] = max;
+            }
+            waitBarrier(a->b);
+        } else {
+            // thread is inactive, wait barrier twice
+            waitBarrier(a->b);
+            waitBarrier(a->b);
+        }
+        threadCount = threadCount >> 1;
     }
+    a->result = max;
     pthread_exit(NULL);
 }
