@@ -1,3 +1,16 @@
+/**
+ * Homework 2: Parallel, binary max function
+ *
+ * CS4414 Operating Systems
+ * Fall 2017
+ *
+ * Maurice Wong - mzw7af
+ *
+ * barrier.c - barrier implementation
+ *
+ */
+
+
 #include "barrier.h"
 
 /**
