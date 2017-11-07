@@ -44,4 +44,4 @@ typedef struct fat_dirEnt {
     unsigned short      write_date;
     unsigned short      first_cluster_low;
     unsigned int        file_size;
-} __attribute__((packed)) fat_dir_ent_t;
+} __attribute__((packed)) DIRENTRY;
