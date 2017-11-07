@@ -45,3 +45,9 @@ typedef struct fat_dirEnt {
     unsigned short      first_cluster_low;
     unsigned int        file_size;
 } __attribute__((packed)) DIRENTRY;
+
+int OS_cd(const char *path);
+int OS_open(const char *path);
+int OS_close(int fd);
+int OS_read(int fildes, void *buf, int nbyte, int offset);
+DIRENTRY *OS_readDir(const char *dirname);

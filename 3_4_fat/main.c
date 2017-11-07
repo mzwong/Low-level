@@ -13,17 +13,12 @@
  */
 
 #include "main.h"
+#include <fcntl.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 
-//PUBLIC FUNCTIONS FOR API
-
-int OS_cd(const char *path);
-int OS_open(const char *path);
-int OS_close(int fd);
-int OS_read(int fildes, void *buf, int nbyte, int offset);
-DIRENTRY *OS_readDir(const char *dirname);
 
 //PRIVATE FUNCTION DECLARATIONS
 DIRENTRY* getRoot();
@@ -52,7 +47,9 @@ DIRENTRY* OS_readDir(const char *dirname) {
 
 DIRENTRY* getRoot() {
     char* filepath = getenv("FAT_FS_PATH");
-    int fd = fopen(filepath, "r");
-    void * boot_sector;
+    int fd = open(filepath, O_RDONLY);
+    void * boot_sector[sizeof(fat_BS_t)];
     read(fd, boot_sector, sizeof(boot_sector));
+    printf("hel");
+    return '\0';
 }

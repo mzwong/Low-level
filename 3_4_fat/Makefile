@@ -1,14 +1,15 @@
 CC=gcc
-CFLAGS=-Wall -g
+CFLAGS=-Wall -g -fPIC
+LINK=-L/home/student/3_4_fat/ -Wl,-rpath=/home/username/foo
 
 main: main.o
-	$(CC) -shared -fPIC -o libFAT.so main.o
+	$(CC) -shared -o libFAT.so main.o
 
 main.o: main.c main.h
-	$(CC) $(CFLAGS) -c main.c
+	$(CC) $(CFLAGS) -fPIC -c main.c
 
 test_run:
-	$(CC) $(CFLAGS) -o test test.c -lFAT
+	$(CC) $(CFLAGS) $(LINK) -o test test.c -lFAT
 
 clean:
 	-rm *.o *.so
