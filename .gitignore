@@ -5,4 +5,6 @@
 !1_bash/mzw7af_hw1_writeup.pdf
 
 *.o
+*.so
+*.raw
 2_bash/max

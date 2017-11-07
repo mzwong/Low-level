@@ -4,3 +4,5 @@ app:
     - .:/home/student
   tty: true
   privileged: true
+  environment:
+    - FAT_FS_PATH=/home/student/3_4_fat/sampledisk16.zip
