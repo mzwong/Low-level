@@ -31,23 +31,23 @@ typedef struct fat_BS {
 } __attribute__((packed)) fat_BS_t;
 
 
-typedef struct fat_dirEnt {
-    unsigned char       name[11];
-    unsigned char       attr;
-    unsigned char       NT_reserved;
-    unsigned char       create_time_tenth;
-    unsigned short      create_time;
-    unsigned short      create_date;
-    unsigned short      last_access_date;
-    unsigned short      first_cluster_number_high;
-    unsigned short      write_time;
-    unsigned short      write_date;
-    unsigned short      first_cluster_low;
-    unsigned int        file_size;
-} __attribute__((packed)) DIRENTRY;
+typedef struct  dir_ent{
+    unsigned char dir_name[11];           // short name
+    unsigned char dir_attr;               // File sttribute
+    unsigned char dir_NTRes;              // Set value to 0, never chnage this
+    unsigned char dir_crtTimeTenth;       // millisecond timestamp for file creation time
+    unsigned short dir_crtTime;           // time file was created
+    unsigned short dir_crtDate;           // date file was created
+    unsigned short dir_lstAccDate;        // last access date
+    unsigned short dir_fstClusHI;         // high word fo this entry's first cluster number
+    unsigned short dir_wrtTime;           // time of last write
+    unsigned short dir_wrtDate;           // dat eof last write
+    unsigned short dir_fstClusLO;         // low word of this entry's first cluster number
+    unsigned int dir_fileSize;          // 32-bit DWORD hoding this file's size in bytes
+}__attribute__ ((packed)) dirEnt;
 
 int OS_cd(const char *path);
 int OS_open(const char *path);
 int OS_close(int fd);
 int OS_read(int fildes, void *buf, int nbyte, int offset);
-DIRENTRY *OS_readDir(const char *dirname);
+dirEnt *OS_readDir(const char *dirname);

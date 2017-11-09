@@ -2,6 +2,5 @@
 #include "main.h"
 
 int main() {
-    printf("hello\n");
-    getRoot();
+    OS_readDir("hello");
 }
