@@ -31,7 +31,7 @@ typedef struct fat_BS {
 } __attribute__((packed)) fat_BS_t;
 
 
-typedef struct  dir_ent{
+typedef struct  dir_ent {
     unsigned char dir_name[11];           // short name
     unsigned char dir_attr;               // File sttribute
     unsigned char dir_NTRes;              // Set value to 0, never chnage this
@@ -44,7 +44,7 @@ typedef struct  dir_ent{
     unsigned short dir_wrtDate;           // dat eof last write
     unsigned short dir_fstClusLO;         // low word of this entry's first cluster number
     unsigned int dir_fileSize;          // 32-bit DWORD hoding this file's size in bytes
-}__attribute__ ((packed)) dirEnt;
+} __attribute__((packed)) dirEnt;
 
 int OS_cd(const char *path);
 int OS_open(const char *path);

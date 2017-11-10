@@ -23,7 +23,7 @@
 //PRIVATE FUNCTION DECLARATIONS
 int openFileSystem();
 void getBootSector(void * boot_sector);
-int getRootDirStart(fat_BS_t* boot_sector);
+unsigned int getFirstRootDirSecNum(fat_BS_t* boot_sector);
 // BEGIN IMPLEMENTATION
 
 int OS_cd(const char *path) {
@@ -47,20 +47,25 @@ dirEnt* OS_readDir(const char *dirname) {
     void * boot_sector[sizeof(fat_BS_t)];
     getBootSector(boot_sector);
     fat_BS_t* bs = (fat_BS_t *) boot_sector;
-    int rootDirStart = getRootDirStart(bs);
+    unsigned int rootDirStart = getFirstRootDirSecNum(bs);
     void *rootDirSpace[sizeof(dirEnt)];
 
     int fd = openFileSystem();
-    lseek(fd, rootDirStart, SEEK_SET);
-    close(fd);
-    int i = 0;
+    lseek(fd, rootDirStart * (bs->bytes_per_sector), SEEK_SET);
     printf("here\n");
-    printf("%d\n", bs->bytes_per_sector);
-    // for (i = 0; i < bs->root_entry_count; i++) {
-    //     read(fd, rootDirSpace, sizeof(dirEnt));
-    //     dirEnt* rootDir = (dirEnt*) rootDirSpace;
-    //     printf("%s\n", rootDir->dir_name);
-    // }
+    printf("%s\n", bs->oem_name);
+    printf("%d\n", bs->root_entry_count);
+    while (1) {
+        read(fd, rootDirSpace, sizeof(dirEnt));
+        dirEnt* rootDir = (dirEnt*) rootDirSpace;
+        printf("%s\n", rootDir->dir_name);
+        printf("%x\n", rootDir->dir_attr);
+        if (rootDir->dir_name[0] == 0x00) {
+            break;
+        }
+    }
+    close(fd);
+
     return '\0';
 }
 
@@ -76,7 +81,7 @@ int openFileSystem() {
  * Gets the starting offset of the root directory
  * Takes in a pointer to the boot sector
  */
-int getRootDirStart(fat_BS_t* boot_sector) {
+unsigned int getFirstRootDirSecNum(fat_BS_t* boot_sector) {
      unsigned int resvdSecCnt = (unsigned int) boot_sector->reserved_sector_count;
      unsigned int numFats = (unsigned int) boot_sector->table_count;
      unsigned int fatSz16 = (unsigned int) boot_sector->table_size_16;
@@ -88,6 +93,46 @@ int getRootDirStart(fat_BS_t* boot_sector) {
  */
 void getBootSector(void* boot_sector) {
     int fd = openFileSystem();
-    read(fd, boot_sector, sizeof(boot_sector));
+    read(fd, boot_sector, sizeof(fat_BS_t));
     close(fd);
+}
+
+/**
+ * returns the first data sector (start of the data region)
+ */
+unsigned int getFirstDataSector(fat_BS_t* boot_sector) {
+    unsigned int rootEntCnt = (unsigned int) boot_sector->root_entry_count;
+    unsigned int bytsPerSec = (unsigned int) boot_sector->bytes_per_sector;
+    unsigned int resvdSecCnt = (unsigned int) boot_sector->reserved_sector_count;
+    unsigned int numFats = (unsigned int) boot_sector->table_count;
+    unsigned int fatSz16 = (unsigned int) boot_sector->table_size_16;
+
+    unsigned int rootDirSectors = ((rootEntCnt * 32) + (bytsPerSec - 1)) / bytsPerSec;
+    return resvdSecCnt + (numFats * fatSz16) + rootDirSectors;
+}
+
+/**
+ * Takes in a cluster number N and returns the first sector of that cluster
+ */
+unsigned int getFirstSectorOfCluster(unsigned int n, fat_BS_t* boot_sector) {
+    unsigned int secPerCluster = (unsigned int) boot_sector->sectors_per_cluster;
+    unsigned int firstDataSector = getFirstDataSector(boot_sector);
+    return ((n-2) * secPerCluster) + firstDataSector;
+}
+
+/**
+ * Takes in a cluster N and returns the FAT value for that cluster.
+ */
+unsigned int getFatValue(unsigned int n, fat_BS_t* boot_sector) {
+    unsigned int resvdSecCnt = (unsigned int) boot_sector->reserved_sector_count;
+    unsigned int bytsPerSec = (unsigned int) boot_sector->bytes_per_sector;
+    unsigned int fatOffset = n * 2;
+    unsigned int fatSecNum = resvdSecCnt + (fatOffset / bytsPerSec);
+    unsigned int fatEntOffset = fatOffset % bytsPerSec;
+
+    int fd = openFileSystem();
+    lseek(fd, fatSecNum * bytsPerSec, SEEK_SET);
+    unsigned char secBuff[bytsPerSec];
+    read(fd, secBuff, bytsPerSec);
+    return (unsigned int) *((short *) &secBuff[fatEntOffset]);
 }
