@@ -24,6 +24,9 @@
 int openFileSystem();
 void getBootSector(void * boot_sector);
 unsigned int getFirstRootDirSecNum(fat_BS_t* boot_sector);
+unsigned int getFirstDataSector(fat_BS_t* boot_sector);
+unsigned int getFirstSectorOfCluster(unsigned int n, fat_BS_t* boot_sector);
+unsigned int getFatValue(unsigned int n, fat_BS_t* boot_sector);
 // BEGIN IMPLEMENTATION
 
 int OS_cd(const char *path) {
@@ -52,14 +55,26 @@ dirEnt* OS_readDir(const char *dirname) {
 
     int fd = openFileSystem();
     lseek(fd, rootDirStart * (bs->bytes_per_sector), SEEK_SET);
-    printf("here\n");
-    printf("%s\n", bs->oem_name);
-    printf("%d\n", bs->root_entry_count);
+
+    // loop through directory entries
     while (1) {
         read(fd, rootDirSpace, sizeof(dirEnt));
         dirEnt* rootDir = (dirEnt*) rootDirSpace;
-        printf("%s\n", rootDir->dir_name);
+        printf("%sa\n", rootDir->dir_name);
         printf("%x\n", rootDir->dir_attr);
+        if (strcmp("PEOPLE     ", (char *) rootDir->dir_name) == 0) {
+            printf("begin\n");
+            unsigned int clusterNum = (unsigned int) rootDir->dir_fstClusHI << 16;
+            printf("%u\n", rootDir->dir_fstClusLO);
+            int firstSector = getFirstSectorOfCluster(clusterNum, bs);
+            char buffer[bs->bytes_per_sector];
+            lseek(fd, firstSector * bs->bytes_per_sector, SEEK_SET);
+            read(fd, buffer, bs->bytes_per_sector);
+            printf("%s\n", buffer);
+            printf("end\n");
+
+            break;
+        }
         if (rootDir->dir_name[0] == 0x00) {
             break;
         }
