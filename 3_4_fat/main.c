@@ -93,7 +93,7 @@ int OS_open(const char *path) {
         printf("%s\n", dir_name);
 
         if (strcmp(fileParts[1], dir_name) == 0 && currDir->dir_attr != 0x10) {
-            printf("file size: %d", currDir->dir_fileSize);
+            printf("file size: %u", currDir->dir_fileSize);
             // found file, move fd to the beginning
             clusterNum = (unsigned int) currDir->dir_fstClusLO;
             seekFirstSectorOfCluster(clusterNum, &fd, bs);
@@ -161,7 +161,7 @@ int OS_read(int fildes, void *buf, int nbyte, int offset) {
     return bytes_read_total;
 }
 
-dirEnt* OS_readDir(const char *dirname) { //TODO NEED TO REALLOC ARRAY
+dirEnt* OS_readDir(const char *dirname) {
     // get boot sector
     void * boot_sector[sizeof(fat_BS_t)];
     getBootSector(boot_sector);
@@ -180,13 +180,13 @@ dirEnt* OS_readDir(const char *dirname) { //TODO NEED TO REALLOC ARRAY
             readingRoot = 1;
     }
     // create array to store dirEnts:
-    dirEnt* directories = malloc(sizeof(dirEnt) * 1000);
+    int dir_len = 1000;
+    dirEnt* directories = malloc(sizeof(dirEnt) * dir_len);
     int count = 0; // count how many dirEnts we get
 
     // loop through directory entries
     int bytes_read = 0;
     unsigned int bytes_per_cluster = getBytesPerCluster(bs);
-    printf("bytes per cluster %d\n", bytes_per_cluster);
     int clusterNum = byteAddressToClusterNum(currByteAddress, bs);
     while (1) {
         // break if read past root directory
@@ -205,14 +205,18 @@ dirEnt* OS_readDir(const char *dirname) { //TODO NEED TO REALLOC ARRAY
             bytes_read = 0;
         }
 
-        read(fd, directories[count], sizeof(dirEnt));
-        count++;
-        if (directories[count]->dir_name[0] == 0x00) {
+        read(fd, &directories[count], sizeof(dirEnt));
+        if (directories[count].dir_name[0] == 0x00) {
             break;
         }
+        count++;
         bytes_read += sizeof(dirEnt);
+        if (count >= dir_len) {
+            dir_len *= 2;
+            directories = realloc(directories, sizeof(dirEnt) * dir_len);
+        }
     }
-    realloc()
+    directories = (dirEnt*) realloc(directories, count * sizeof(dirEnt));
     return directories;
 }
 
