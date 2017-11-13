@@ -19,6 +19,7 @@
 #include <string.h>
 #include "main.h"
 
+static char* cwd = "/"; // file path to the current working directory. Ends with a '/'.
 
 
 //PRIVATE FUNCTION DECLARATIONS
@@ -36,10 +37,22 @@ unsigned int getBytesPerCluster(fat_BS_t* bs);
 unsigned int byteAddressToClusterNum(unsigned int byte_address, fat_BS_t* bs);
 void fixStrings(char* newString, char* oldString);
 void splitFilePath(char** buffer, const char* path);
+char* getAbsolutePath(char * oldPath);
 // BEGIN IMPLEMENTATION
 
 int OS_cd(const char *path) {
-    return -1;
+    // get boot sector
+    void * boot_sector[sizeof(fat_BS_t)];
+    getBootSector(boot_sector);
+    fat_BS_t* bs = (fat_BS_t *) boot_sector;
+
+    char* newPath = getAbsolutePath(strdup(path));
+    int fd = traverseDirectories(newPath, bs);
+    if (fd == -1) {
+        return -1;
+    }
+    cwd = newPath;
+    return 1;
 }
 
 int OS_open(const char *path) {
@@ -51,7 +64,8 @@ int OS_open(const char *path) {
     // traverse directories to the directory containing the desired file
     char* fileParts[2];
     splitFilePath(fileParts, path);
-    int fd = traverseDirectories(fileParts[0], bs);
+    char* dirpath = getAbsolutePath(fileParts[0]);
+    int fd = traverseDirectories(dirpath, bs);
     if (fd == -1) {
          return -1;
     }
@@ -66,7 +80,6 @@ int OS_open(const char *path) {
     // loop through directory entries
     int bytes_read = 0;
     unsigned int bytes_per_cluster = getBytesPerCluster(bs);
-    printf("bytes per cluster %d\n", bytes_per_cluster);
     void *currDirSpace[sizeof(dirEnt)];
     int clusterNum = byteAddressToClusterNum(currByteAddress, bs);
     while (1) {
@@ -90,10 +103,8 @@ int OS_open(const char *path) {
         dirEnt* currDir = (dirEnt*) currDirSpace;
         char dir_name[12];
         fixStrings(dir_name, (char *) currDir->dir_name);
-        printf("%s\n", dir_name);
 
         if (strcmp(fileParts[1], dir_name) == 0 && currDir->dir_attr != 0x10) {
-            printf("file size: %u", currDir->dir_fileSize);
             // found file, move fd to the beginning
             clusterNum = (unsigned int) currDir->dir_fstClusLO;
             seekFirstSectorOfCluster(clusterNum, &fd, bs);
@@ -137,24 +148,20 @@ int OS_read(int fildes, void *buf, int nbyte, int offset) {
                 bytes_read_total += bytes_read;
                 buf += bytes_read;
                 if (bytes_read < remaining_bytes_in_cluster) { // reached end of file. terminate
-                    printf("end of file\n");
                     return bytes_read_total;
                 }
                 if (isEndOfClusterChain(fat_value)) { // trying to read more, but at end of cluster chain. terminate
-                    printf("end of cluster chain\n");
                     return bytes_read_total;
                 }
                 // advance cluster chain:
                 clusterNum = fat_value;
                 seekFirstSectorOfCluster(clusterNum, &fildes, bs);
                 bytes_read_from_curr_cluster = 0;
-                printf("advancing cluster chain\n");
                 continue;
             }
         } else { // not reading past the current cluster
             int bytes_read = read(fildes, buf, remaining_bytes_total);
             bytes_read_total += bytes_read;
-            printf("done reading buffer");
             return bytes_read_total;
         }
     }
@@ -168,7 +175,8 @@ dirEnt* OS_readDir(const char *dirname) {
     fat_BS_t* bs = (fat_BS_t *) boot_sector;
 
     // traverse directories to the directory
-    int fd = traverseDirectories(strdup(dirname), bs);
+    char* path = getAbsolutePath(strdup(dirname));
+    int fd = traverseDirectories(path, bs);
     if (fd == -1) {
          return NULL;
     }
@@ -221,7 +229,7 @@ dirEnt* OS_readDir(const char *dirname) {
 }
 
 /**
- * Traverses directories down the specified path. Returns -1 if failure, else
+ * Traverses directories down the specified absolute path. Returns -1 if failure, else
  * file descriptor to the directory.
  */
 int traverseDirectories(char* dirname, fat_BS_t* bs) {
@@ -237,7 +245,6 @@ int traverseDirectories(char* dirname, fat_BS_t* bs) {
     unsigned int clusterNum = 2;
     while (path_segment != NULL) {
         // loop through directory entries
-        printf("START DIR\n");
         unsigned int bytes_read = 0;
         while (1) {
             // break if read past root directory
@@ -260,7 +267,6 @@ int traverseDirectories(char* dirname, fat_BS_t* bs) {
             dirEnt* currDir = (dirEnt*) currDirSpace;
             char dir_name[12];
             fixStrings(dir_name, (char *) currDir->dir_name);
-            printf("%s\n", dir_name);
 
             if (strcmp(path_segment, dir_name) == 0 && currDir->dir_attr == 0x10) {
                 clusterNum = (unsigned int) currDir->dir_fstClusLO;
@@ -275,7 +281,6 @@ int traverseDirectories(char* dirname, fat_BS_t* bs) {
         readingRoot = 0; // we have passed at least the root dir
         path_segment = strtok(NULL, "/");
     }
-    printf("orig clusno %d\n", clusterNum);
     return fd;
 }
 
@@ -337,9 +342,13 @@ unsigned int getFirstDataSector(fat_BS_t* boot_sector) {
  * the beginning of the cluster
  */
 void seekFirstSectorOfCluster(unsigned int n, int* fd, fat_BS_t* boot_sector) {
-    unsigned int firstSector = getFirstSectorOfCluster(n, boot_sector);
+    unsigned int firstSector;
+    if (n == 0) {
+        firstSector = getFirstRootDirSecNum(boot_sector);
+    } else {
+        firstSector = getFirstSectorOfCluster(n, boot_sector);
+    }
     lseek(*fd, firstSector * boot_sector->bytes_per_sector, SEEK_SET);
-    printf("%x\n", firstSector * boot_sector->bytes_per_sector);
 }
 
 /**
@@ -440,4 +449,21 @@ void splitFilePath(char** buffer, const char* path) {
     secondPart[i] = '\0';
     buffer[0] = firstPart;
     buffer[1] = secondPart;
+}
+
+/**
+ * takes in a relative or absolute path name and returns the absolute path name
+ */
+char* getAbsolutePath(char * oldPath) {
+    if (strlen(oldPath) > 0 && oldPath[0] == '/') {
+        return oldPath; // already an absolute path
+    }
+    char* newPath = malloc(sizeof(char) * (strlen(oldPath) + strlen(cwd) + 2) );
+    strcat(newPath, cwd);
+    strcat(newPath, oldPath);
+    int lastCharIndex = strlen(oldPath) + strlen(cwd) - 1;
+    if (newPath[lastCharIndex] != '/') {
+        strcat(newPath, "/");
+    }
+    return newPath;
 }
