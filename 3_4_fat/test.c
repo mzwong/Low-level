@@ -28,5 +28,6 @@ int main() {
     OS_cd("ABK2Y/");
     OS_cd("/");
     OS_cd("PEOPLE/ABK2Y");
+    printf("file close %d\n", OS_close(fd));
 
 }

@@ -20,7 +20,7 @@
 #include "main.h"
 
 static char* cwd = "/"; // file path to the current working directory. Ends with a '/'.
-
+static unsigned short fd_table[128]; // file descriptor table tracks beginning clus no of file
 
 //PRIVATE FUNCTION DECLARATIONS
 int traverseDirectories(char* dirname, fat_BS_t* bs);
@@ -49,8 +49,10 @@ int OS_cd(const char *path) {
     char* newPath = getAbsolutePath(strdup(path));
     int fd = traverseDirectories(newPath, bs);
     if (fd == -1) {
+        close(fd);
         return -1;
     }
+    close(fd);
     cwd = newPath;
     return 1;
 }
@@ -67,7 +69,8 @@ int OS_open(const char *path) {
     char* dirpath = getAbsolutePath(fileParts[0]);
     int fd = traverseDirectories(dirpath, bs);
     if (fd == -1) {
-         return -1;
+        close(fd);
+        return -1;
     }
     unsigned int currByteAddress = (unsigned int) lseek(fd, 0, SEEK_CUR);
     // CHECK IF IN ROOT OR NOT
@@ -85,12 +88,14 @@ int OS_open(const char *path) {
     while (1) {
         // break if read past root directory
         if (readingRoot && bytes_read >= bs->root_entry_count) {
+            close(fd);
             return -1;
         }
         // advance to next cluster in clusterchain if available
         if (!readingRoot && bytes_read >= bytes_per_cluster) {
             unsigned int fat_value = getFatValue(clusterNum, bs);
             if (isEndOfClusterChain(fat_value)) {
+                close(fd);
                 return -1; // end of cluster chain, could not find file name
             } else {
                 clusterNum = fat_value;
@@ -105,25 +110,36 @@ int OS_open(const char *path) {
         fixStrings(dir_name, (char *) currDir->dir_name);
 
         if (strcmp(fileParts[1], dir_name) == 0 && currDir->dir_attr != 0x10) {
-            // found file, move fd to the beginning
-            clusterNum = (unsigned int) currDir->dir_fstClusLO;
-            seekFirstSectorOfCluster(clusterNum, &fd, bs);
-            break;
+            // found file, make entry in the file descriptor table
+            int i;
+            for (i = 0; i < 128; i++) {
+                if (fd_table[i] == 0) {
+                    fd_table[i] = currDir->dir_fstClusLO;
+                    close(fd);
+                    return i;
+                }
+            }
+            // no empty spaces in the local fd table. return error
+            close(fd);
+            return -1;
         }
         if (currDir->dir_name[0] == 0x00) {
+            close(fd);
             return -1;
         }
         bytes_read += sizeof(dirEnt);
     }
-    return fd;
+    close(fd);
+    return -1;
 }
 
 int OS_close(int fd) {
-    int closeStatus = close(fd);
-    if (closeStatus == 0) { //success
+    if (fd_table[fd] != 0) {
+        fd_table[fd] = 0;
         return 1;
+    } else {
+        return -1;
     }
-    return closeStatus; //error, return -1
 }
 
 int OS_read(int fildes, void *buf, int nbyte, int offset) {
@@ -132,43 +148,60 @@ int OS_read(int fildes, void *buf, int nbyte, int offset) {
     getBootSector(boot_sector);
     fat_BS_t* bs = (fat_BS_t *) boot_sector;
 
-    unsigned int currByteAddress = (unsigned int) lseek(fildes, 0, SEEK_CUR);
-    int clusterNum = byteAddressToClusterNum(currByteAddress, bs);
+    // move real file descriptor to the correct place:
+    unsigned int clusterNum = (unsigned int) fd_table[fildes];
     unsigned int firstSectorOfCluster = getFirstSectorOfCluster(clusterNum, bs);
-    unsigned int bytes_read_from_curr_cluster = currByteAddress - firstSectorOfCluster * bs->bytes_per_sector;
+    int real_fd = openFileSystem();
+    lseek(real_fd, firstSectorOfCluster * bs->bytes_per_sector, SEEK_SET);
+
+    // seek to offset
+    unsigned int bytes_to_offset = offset;
+    unsigned int bytes_read_from_curr_cluster = 0;
+    while (1) {
+        if (bytes_to_offset > getBytesPerCluster(bs)) {
+            // advance cluster chain:
+            clusterNum = getFatValue(clusterNum, bs);
+            bytes_to_offset -= getBytesPerCluster(bs);
+        } else {
+            seekFirstSectorOfCluster(clusterNum, &real_fd, bs);
+            lseek(real_fd, bytes_to_offset, SEEK_CUR);
+            bytes_read_from_curr_cluster = bytes_to_offset;
+            break;
+        }
+    }
     unsigned int bytes_read_total = 0;
 
-    lseek(fildes, offset, SEEK_CUR);
     while (bytes_read_total < nbyte) {
         int fat_value = getFatValue(clusterNum, bs);
         int remaining_bytes_in_cluster = getBytesPerCluster(bs) - bytes_read_from_curr_cluster;
         int remaining_bytes_total = nbyte - bytes_read_total;
 
         if (remaining_bytes_in_cluster < remaining_bytes_total) { // trying to read the rest of the cluster
-            int bytes_read = read(fildes, buf, remaining_bytes_in_cluster);
+            int bytes_read = read(real_fd, buf, remaining_bytes_in_cluster);
             if (bytes_read == -1) { // unsuccessful read
                 return -1;
             } else { // successful read
                 bytes_read_total += bytes_read;
                 buf += bytes_read;
                 if (bytes_read < remaining_bytes_in_cluster) { // reached end of file. terminate
-                    return bytes_read_total;
+                    break;
                 }
                 if (isEndOfClusterChain(fat_value)) { // trying to read more, but at end of cluster chain. terminate
-                    return bytes_read_total;
+                    break;
                 }
                 // advance cluster chain:
                 clusterNum = fat_value;
-                seekFirstSectorOfCluster(clusterNum, &fildes, bs);
+                seekFirstSectorOfCluster(clusterNum, &real_fd, bs);
                 bytes_read_from_curr_cluster = 0;
                 continue;
             }
         } else { // not reading past the current cluster
-            int bytes_read = read(fildes, buf, remaining_bytes_total);
+            int bytes_read = read(real_fd, buf, remaining_bytes_total);
             bytes_read_total += bytes_read;
-            return bytes_read_total;
+            break;
         }
     }
+    close(real_fd);
     return bytes_read_total;
 }
 
@@ -182,7 +215,8 @@ dirEnt* OS_readDir(const char *dirname) {
     char* path = getAbsolutePath(strdup(dirname));
     int fd = traverseDirectories(path, bs);
     if (fd == -1) {
-         return NULL;
+        close(fd);
+        return NULL;
     }
     unsigned int currByteAddress = (unsigned int) lseek(fd, 0, SEEK_CUR);
     // CHECK IF IN ROOT OR NOT
@@ -229,6 +263,7 @@ dirEnt* OS_readDir(const char *dirname) {
         }
     }
     directories = (dirEnt*) realloc(directories, count * sizeof(dirEnt));
+    close(fd);
     return directories;
 }
 
@@ -321,10 +356,10 @@ void getBootSector(void* boot_sector) {
  * Open fd to point to beginning of root directory
  */
 int openRootDir(fat_BS_t* bs) {
+    int real_fd = openFileSystem();
     unsigned int rootDirStart = getFirstRootDirSecNum(bs);
-    int fd = openFileSystem();
-    lseek(fd, rootDirStart * (bs->bytes_per_sector), SEEK_SET);
-    return fd;
+    lseek(real_fd, rootDirStart * (bs->bytes_per_sector), SEEK_SET);
+    return real_fd;
 }
 
 /**
