@@ -12,12 +12,13 @@
  * OBJECTS:     libFAT.so
  */
 
-#include "main.h"
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include "main.h"
+
 
 
 //PRIVATE FUNCTION DECLARATIONS
@@ -27,6 +28,10 @@ unsigned int getFirstRootDirSecNum(fat_BS_t* boot_sector);
 unsigned int getFirstDataSector(fat_BS_t* boot_sector);
 unsigned int getFirstSectorOfCluster(unsigned int n, fat_BS_t* boot_sector);
 unsigned int getFatValue(unsigned int n, fat_BS_t* boot_sector);
+void seekFirstSectorOfCluster(unsigned int n, int* fd, fat_BS_t* boot_sector);
+unsigned int isEndOfClusterChain(unsigned int fat_value);
+unsigned int getBytesPerCluster(fat_BS_t* bs);
+void fixStrings(char* newString, char* oldString);
 // BEGIN IMPLEMENTATION
 
 int OS_cd(const char *path) {
@@ -47,37 +52,61 @@ int OS_read(int fildes, void *buf, int nbyte, int offset) {
 
 dirEnt* OS_readDir(const char *dirname) {
 
+    // set file descriptor to beginning of root directory
     void * boot_sector[sizeof(fat_BS_t)];
     getBootSector(boot_sector);
     fat_BS_t* bs = (fat_BS_t *) boot_sector;
     unsigned int rootDirStart = getFirstRootDirSecNum(bs);
-    void *rootDirSpace[sizeof(dirEnt)];
-
+    void *currDirSpace[sizeof(dirEnt)];
     int fd = openFileSystem();
     lseek(fd, rootDirStart * (bs->bytes_per_sector), SEEK_SET);
+    int readingRoot = 1;
 
-    // loop through directory entries
-    while (1) {
-        read(fd, rootDirSpace, sizeof(dirEnt));
-        dirEnt* rootDir = (dirEnt*) rootDirSpace;
-        printf("%sa\n", rootDir->dir_name);
-        printf("%x\n", rootDir->dir_attr);
-        if (strcmp("PEOPLE     ", (char *) rootDir->dir_name) == 0) {
-            printf("begin\n");
-            unsigned int clusterNum = (unsigned int) rootDir->dir_fstClusHI << 16;
-            printf("%u\n", rootDir->dir_fstClusLO);
-            int firstSector = getFirstSectorOfCluster(clusterNum, bs);
-            char buffer[bs->bytes_per_sector];
-            lseek(fd, firstSector * bs->bytes_per_sector, SEEK_SET);
-            read(fd, buffer, bs->bytes_per_sector);
-            printf("%s\n", buffer);
-            printf("end\n");
+    // go down file path. fd is set at beginning of data region for this dir/file
+    char* path_segment;
+    char* path = strdup(dirname);
+    path_segment = strtok(path, "/");
+    unsigned int bytes_per_cluster = getBytesPerCluster(bs);
+    unsigned int clusterNum = 0;
+    while (path_segment != NULL) {
+        // loop through directory entries
+        printf("START DIR\n");
+        unsigned int bytes_read = 0;
+        while (1) {
+            // break if read past root directory
+            if (readingRoot && bytes_read >= bs->root_entry_count) {
+                break;
+            }
+            // advance to next cluster in clusterchain if available
+            if (!readingRoot && bytes_read >= bytes_per_cluster) {
+                unsigned int fat_value = getFatValue(clusterNum, bs);
+                if (isEndOfClusterChain(fat_value)) {
+                    return NULL; // end of cluster chain, could not find folder name
+                } else {
+                    clusterNum = fat_value;
+                    seekFirstSectorOfCluster(clusterNum, &fd, bs);
+                }
+                bytes_read = 0;
+            }
 
-            break;
+            read(fd, currDirSpace, sizeof(dirEnt));
+            dirEnt* currDir = (dirEnt*) currDirSpace;
+            char dir_name[12];
+            fixStrings(dir_name, (char *) currDir->dir_name);
+            printf("%s\n", dir_name);
+
+            if (strcmp(path_segment, dir_name) == 0) {
+                clusterNum = (unsigned int) currDir->dir_fstClusLO;
+                seekFirstSectorOfCluster(clusterNum, &fd, bs);
+                break;
+            }
+            if (currDir->dir_name[0] == 0x00) {
+                break;
+            }
+            bytes_read += sizeof(dirEnt);
         }
-        if (rootDir->dir_name[0] == 0x00) {
-            break;
-        }
+        readingRoot = 0; // we have passed at least the root dir
+        path_segment = strtok(NULL, "/");
     }
     close(fd);
 
@@ -127,6 +156,15 @@ unsigned int getFirstDataSector(fat_BS_t* boot_sector) {
 }
 
 /**
+ * Takes in a cluster number N and file descriptor, and seeks the file descriptor to
+ * the beginning of the cluster
+ */
+void seekFirstSectorOfCluster(unsigned int n, int* fd, fat_BS_t* boot_sector) {
+    unsigned int firstSector = getFirstSectorOfCluster(n, boot_sector);
+    lseek(*fd, firstSector * boot_sector->bytes_per_sector, SEEK_SET);
+}
+
+/**
  * Takes in a cluster number N and returns the first sector of that cluster
  */
 unsigned int getFirstSectorOfCluster(unsigned int n, fat_BS_t* boot_sector) {
@@ -150,4 +188,38 @@ unsigned int getFatValue(unsigned int n, fat_BS_t* boot_sector) {
     unsigned char secBuff[bytsPerSec];
     read(fd, secBuff, bytsPerSec);
     return (unsigned int) *((short *) &secBuff[fatEntOffset]);
+}
+
+/**
+ * Takes in a FAT table cluster value and determines if it is end of cluster chain (0 or 1)
+ */
+unsigned int isEndOfClusterChain(unsigned int fat_value) {
+    return fat_value >= 0xFFF8;
+}
+
+/**
+ * Calculate the number of bytes per cluster
+ */
+unsigned int getBytesPerCluster(fat_BS_t* boot_sector) {
+    unsigned int bytsPerSec = (unsigned int) boot_sector->bytes_per_sector;
+    unsigned int secPerCluster = (unsigned int) boot_sector->sectors_per_cluster;
+    return bytsPerSec * secPerCluster;
+}
+
+/**
+ * Takes a char array buffer of size 12,
+ * Takes a string (possibly missing null terminator) and trims
+ * trailing spaces and adds the appropriate null terminator
+ */
+void fixStrings(char* newString, char* oldString) {
+    int i = 0;
+    for (i = 0; i < 11; i++) {
+        newString[i] = oldString[i];
+    }
+    newString[11] = '\0';
+    i = 10;
+    while (i >= 0 && newString[i] == ' ') {
+        newString[i] = '\0';
+        i--;
+    }
 }

@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 typedef struct fat_extBS_16 {
 	//extended fat12 and fat16 stuff
 	unsigned char		bios_drive_num;
@@ -32,18 +34,18 @@ typedef struct fat_BS {
 
 
 typedef struct  dir_ent {
-    unsigned char dir_name[11];           // short name
-    unsigned char dir_attr;               // File sttribute
-    unsigned char dir_NTRes;              // Set value to 0, never chnage this
-    unsigned char dir_crtTimeTenth;       // millisecond timestamp for file creation time
-    unsigned short dir_crtTime;           // time file was created
-    unsigned short dir_crtDate;           // date file was created
-    unsigned short dir_lstAccDate;        // last access date
-    unsigned short dir_fstClusHI;         // high word fo this entry's first cluster number
-    unsigned short dir_wrtTime;           // time of last write
-    unsigned short dir_wrtDate;           // dat eof last write
-    unsigned short dir_fstClusLO;         // low word of this entry's first cluster number
-    unsigned int dir_fileSize;          // 32-bit DWORD hoding this file's size in bytes
+    uint8_t dir_name[11];           // short name
+    uint8_t dir_attr;               // File sttribute
+    uint8_t dir_NTRes;              // Set value to 0, never chnage this
+    uint8_t dir_crtTimeTenth;       // millisecond timestamp for file creation time
+    uint16_t dir_crtTime;           // time file was created
+    uint16_t dir_crtDate;           // date file was created
+    uint16_t dir_lstAccDate;        // last access date
+    uint16_t dir_fstClusHI;         // high word fo this entry's first cluster number
+    uint16_t dir_wrtTime;           // time of last write
+    uint16_t dir_wrtDate;           // dat eof last write
+    uint16_t dir_fstClusLO;         // low word of this entry's first cluster number
+    uint32_t dir_fileSize;          // 32-bit DWORD hoding this file's size in bytes
 } __attribute__((packed)) dirEnt;
 
 int OS_cd(const char *path);
