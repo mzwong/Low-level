@@ -93,6 +93,7 @@ int OS_open(const char *path) {
         printf("%s\n", dir_name);
 
         if (strcmp(fileParts[1], dir_name) == 0 && currDir->dir_attr != 0x10) {
+            printf("file size: %d", currDir->dir_fileSize);
             // found file, move fd to the beginning
             clusterNum = (unsigned int) currDir->dir_fstClusLO;
             seekFirstSectorOfCluster(clusterNum, &fd, bs);
@@ -111,7 +112,56 @@ int OS_close(int fd) {
 }
 
 int OS_read(int fildes, void *buf, int nbyte, int offset) {
+    // get boot sector
+    void * boot_sector[sizeof(fat_BS_t)];
+    getBootSector(boot_sector);
+    fat_BS_t* bs = (fat_BS_t *) boot_sector;
 
+    unsigned int currByteAddress = (unsigned int) lseek(fildes, 0, SEEK_CUR);
+    int clusterNum = byteAddressToClusterNum(currByteAddress, bs);
+    unsigned int firstSectorOfCluster = getFirstSectorOfCluster(clusterNum, bs);
+    unsigned int bytes_read_from_curr_cluster = currByteAddress - firstSectorOfCluster * bs->bytes_per_sector;
+    unsigned int bytes_read_total = 0;
+
+    lseek(fildes, offset, SEEK_CUR);
+    while (bytes_read_total < nbyte) {
+        int fat_value = getFatValue(clusterNum, bs);
+        int remaining_bytes_in_cluster = getBytesPerCluster(bs) - bytes_read_from_curr_cluster;
+        int remaining_bytes_total = nbyte - bytes_read_total;
+
+        if (remaining_bytes_in_cluster < remaining_bytes_total) { // trying to read the rest of the cluster
+            int bytes_read = read(fildes, buf, remaining_bytes_in_cluster);
+            if (bytes_read == -1) { // unsuccessful read
+                return -1;
+            } else { // successful read
+                bytes_read_total += bytes_read;
+                buf += bytes_read;
+                if (bytes_read < remaining_bytes_in_cluster) { // reached end of file. terminate
+                    printf("end of file\n");
+
+                    return bytes_read_total;
+                }
+                if (isEndOfClusterChain(fat_value)) { // trying to read more, but at end of cluster chain. terminate
+                    printf("end of cluster chain\n");
+
+                    return bytes_read_total;
+                }
+                // advance cluster chain:
+                clusterNum = fat_value;
+                seekFirstSectorOfCluster(clusterNum, &fildes, bs);
+                bytes_read_from_curr_cluster = 0;
+                printf("advancing cluster chain\n");
+                continue;
+            }
+        } else { // not reading past the current cluster
+            int bytes_read = read(fildes, buf, remaining_bytes_total);
+            bytes_read_total += bytes_read;
+            printf("done reading buffer");
+
+            return bytes_read_total;
+        }
+    }
+    return bytes_read_total;
 }
 
 dirEnt* OS_readDir(const char *dirname) {
