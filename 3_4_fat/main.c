@@ -138,12 +138,10 @@ int OS_read(int fildes, void *buf, int nbyte, int offset) {
                 buf += bytes_read;
                 if (bytes_read < remaining_bytes_in_cluster) { // reached end of file. terminate
                     printf("end of file\n");
-
                     return bytes_read_total;
                 }
                 if (isEndOfClusterChain(fat_value)) { // trying to read more, but at end of cluster chain. terminate
                     printf("end of cluster chain\n");
-
                     return bytes_read_total;
                 }
                 // advance cluster chain:
@@ -157,15 +155,65 @@ int OS_read(int fildes, void *buf, int nbyte, int offset) {
             int bytes_read = read(fildes, buf, remaining_bytes_total);
             bytes_read_total += bytes_read;
             printf("done reading buffer");
-
             return bytes_read_total;
         }
     }
     return bytes_read_total;
 }
 
-dirEnt* OS_readDir(const char *dirname) {
-    return '\0';
+dirEnt* OS_readDir(const char *dirname) { //TODO NEED TO REALLOC ARRAY
+    // get boot sector
+    void * boot_sector[sizeof(fat_BS_t)];
+    getBootSector(boot_sector);
+    fat_BS_t* bs = (fat_BS_t *) boot_sector;
+
+    // traverse directories to the directory
+    int fd = traverseDirectories(strdup(dirname), bs);
+    if (fd == -1) {
+         return NULL;
+    }
+    unsigned int currByteAddress = (unsigned int) lseek(fd, 0, SEEK_CUR);
+    // CHECK IF IN ROOT OR NOT
+    int readingRoot = 0;
+    if (currByteAddress >= getFirstRootDirSecNum(bs) * bs->bytes_per_sector &&
+        currByteAddress < getFirstDataSector(bs)* bs->bytes_per_sector) {
+            readingRoot = 1;
+    }
+    // create array to store dirEnts:
+    dirEnt* directories = malloc(sizeof(dirEnt) * 1000);
+    int count = 0; // count how many dirEnts we get
+
+    // loop through directory entries
+    int bytes_read = 0;
+    unsigned int bytes_per_cluster = getBytesPerCluster(bs);
+    printf("bytes per cluster %d\n", bytes_per_cluster);
+    int clusterNum = byteAddressToClusterNum(currByteAddress, bs);
+    while (1) {
+        // break if read past root directory
+        if (readingRoot && bytes_read >= bs->root_entry_count) {
+            break;
+        }
+        // advance to next cluster in clusterchain if available
+        if (!readingRoot && bytes_read >= bytes_per_cluster) {
+            unsigned int fat_value = getFatValue(clusterNum, bs);
+            if (isEndOfClusterChain(fat_value)) {
+                break; // end of cluster chain, could not find file name
+            } else {
+                clusterNum = fat_value;
+                seekFirstSectorOfCluster(clusterNum, &fd, bs);
+            }
+            bytes_read = 0;
+        }
+
+        read(fd, directories[count], sizeof(dirEnt));
+        count++;
+        if (directories[count]->dir_name[0] == 0x00) {
+            break;
+        }
+        bytes_read += sizeof(dirEnt);
+    }
+    realloc()
+    return directories;
 }
 
 /**
