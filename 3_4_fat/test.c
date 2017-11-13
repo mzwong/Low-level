@@ -7,7 +7,6 @@ int main() {
     int fd = OS_open("404-FAILJPG");
     char buffer[500000];
     int bytes_read = OS_read(fd, buffer, 5000000, 0);
-    //int bytes_read = read(fd, buffer, 5000000);
     printf("%s\n", buffer);
     printf("%d\n", bytes_read);
 

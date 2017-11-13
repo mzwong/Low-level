@@ -119,7 +119,11 @@ int OS_open(const char *path) {
 }
 
 int OS_close(int fd) {
-    return close(fd);
+    int closeStatus = close(fd);
+    if (closeStatus == 0) { //success
+        return 1;
+    }
+    return closeStatus; //error, return -1
 }
 
 int OS_read(int fildes, void *buf, int nbyte, int offset) {
