@@ -12,6 +12,7 @@
  * OBJECTS:     libFAT.so
  */
 
+#include <ctype.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -36,6 +37,7 @@ unsigned int isEndOfClusterChain(unsigned int fat_value);
 unsigned int getBytesPerCluster(fat_BS_t* bs);
 unsigned int byteAddressToClusterNum(unsigned int byte_address, fat_BS_t* bs);
 void fixStrings(char* newString, char* oldString);
+void toShortName(char* newString, char* oldString);
 void splitFilePath(char** buffer, const char* path);
 char* getAbsolutePath(char * oldPath);
 // BEGIN IMPLEMENTATION
@@ -63,7 +65,7 @@ int OS_open(const char *path) {
     getBootSector(boot_sector);
     fat_BS_t* bs = (fat_BS_t *) boot_sector;
 
-    // traverse directories to the directory containing the desired file
+    //  directories to the directory containing the desired file
     char* fileParts[2];
     splitFilePath(fileParts, path);
     char* dirpath = getAbsolutePath(fileParts[0]);
@@ -107,9 +109,10 @@ int OS_open(const char *path) {
         read(fd, currDirSpace, sizeof(dirEnt));
         dirEnt* currDir = (dirEnt*) currDirSpace;
         char dir_name[12];
+        char path_dir_name[12];
         fixStrings(dir_name, (char *) currDir->dir_name);
-
-        if (strcmp(fileParts[1], dir_name) == 0 && currDir->dir_attr != 0x10) {
+        toShortName(path_dir_name, fileParts[1]);
+        if (strcmp(path_dir_name, dir_name) == 0 && currDir->dir_attr != 0x10) {
             // found file, make entry in the file descriptor table
             int i;
             for (i = 0; i < 128; i++) {
@@ -305,9 +308,10 @@ int traverseDirectories(char* dirname, fat_BS_t* bs) {
             read(fd, currDirSpace, sizeof(dirEnt));
             dirEnt* currDir = (dirEnt*) currDirSpace;
             char dir_name[12];
+            char path_dir_name[12];
             fixStrings(dir_name, (char *) currDir->dir_name);
-
-            if (strcmp(path_segment, dir_name) == 0 && currDir->dir_attr == 0x10) {
+            toShortName(path_dir_name, path_segment);
+            if (strcmp(path_dir_name, dir_name) == 0 && currDir->dir_attr == 0x10) {
                 clusterNum = (unsigned int) currDir->dir_fstClusLO;
                 seekFirstSectorOfCluster(clusterNum, &fd, bs);
                 break;
@@ -451,11 +455,36 @@ void fixStrings(char* newString, char* oldString) {
         newString[i] = oldString[i];
     }
     newString[11] = '\0';
-    i = 10;
-    while (i >= 0 && newString[i] == ' ') {
-        newString[i] = '\0';
-        i--;
+}
+
+/**
+ * Converts lowercase filename to proper shortname
+ */
+void toShortName(char* newString, char* oldString) {
+    int i = 0;
+    int len = strlen(oldString);
+    while (i < 8 && !(oldString[i] == '.' && i == len - 4) && i < len){
+        newString[i] = toupper(oldString[i]);
+        i += 1;
     }
+    while (i < 8) {
+        newString[i] = ' ';
+        i += 1;
+    }
+    if (len - 4 > 0 && oldString[len-4] == '.') {
+        for (i = 0; i < 3; i++) {
+            newString[8+i] = toupper(oldString[len- 3 + i]);
+        }
+    } else {
+        for (i = 8; i < 11; i++) {
+            newString[i] = ' ';
+        }
+    }
+    if (len - 4 > 8) {
+        newString[6] = '~';
+        newString[7] = '1';
+    }
+    newString[11] = '\0';
 }
 
 /**

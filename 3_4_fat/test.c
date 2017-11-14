@@ -3,12 +3,12 @@
 #include "main.h"
 
 int main() {
-    OS_cd("MEDIA");
-    int fd = OS_open("/PEOPLE/ABK2Y/COFFEE~1TXT");
-    int fd2 = OS_open("HEARSE~1JPG");
+    OS_cd("media");
+    int fd = OS_open("/people/smb3wk/jokes.txt");
+    int fd2 = OS_open("hearse-fail.jpg");
     char buffer[500000];
     char buffer2[500000];
-    int bytes_read = OS_read(fd, buffer, 5000000, 10);
+    int bytes_read = OS_read(fd, buffer, 5000000, 0);
     int bytes_read2 = OS_read(fd2, buffer2, 5000000, 0);
 
 
@@ -23,19 +23,19 @@ int main() {
     fp = fopen("fail2.jpg", "w+");
     fwrite(buffer2, 100000, 1, fp);
 
-    dirEnt* directories = OS_readDir("../PEOPLE/ABK2Y");
+    dirEnt* directories = OS_readDir("/media/");
     if (directories == NULL) {
         printf("NULL FOUND YAY\n");
         return 0;
     }
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 75; i++) {
         printf("%s\n", directories[i].dir_name);
     }
 
-    OS_cd("PEOPLE");
-    OS_cd("ABK2Y/");
+    OS_cd("people");
+    OS_cd("abk2y/");
     OS_cd("/");
-    OS_cd("PEOPLE/ABK2Y");
+    OS_cd("people/abk2y");
     printf("file close %d\n", OS_close(fd));
     printf("file close %d\n", OS_close(fd2));
     printf("file close %d\n", OS_close(fd));
