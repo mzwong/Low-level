@@ -10,6 +10,7 @@
  *
  * COMPILE:     make
  * OBJECTS:     libFAT.so
+ * To link the shared library, you also need to #include "main.h"
  */
 
 #include <ctype.h>
