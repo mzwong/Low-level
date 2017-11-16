@@ -4,7 +4,7 @@
 
 int main() {
     OS_cd("media");
-    int fd = OS_open("/people/smb3wk/jokes.txt");
+    int fd = OS_open("/people/yyz5w/the-game.txt");
     int fd2 = OS_open("hearse-fail.jpg");
     char buffer[500000];
     char buffer2[500000];
@@ -23,7 +23,7 @@ int main() {
     fp = fopen("fail2.jpg", "w+");
     fwrite(buffer2, 100000, 1, fp);
 
-    dirEnt* directories = OS_readDir("/media/");
+    dirEnt* directories = OS_readDir("/people/");
     if (directories == NULL) {
         printf("NULL FOUND YAY\n");
         return 0;

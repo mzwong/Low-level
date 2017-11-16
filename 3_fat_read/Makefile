@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-Wall -g -fPIC
-LINK=-L/home/student/3_4_fat/ -Wl,-rpath=/home/student/3_4_fat/
+LINK=-L/home/student/3_fat_read/ -Wl,-rpath=/home/student/3_fat_read/
 
 main: main.o
 	$(CC) -shared -o libFAT16.so main.o
