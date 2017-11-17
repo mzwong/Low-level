@@ -94,7 +94,7 @@ int OS_mkdir(const char *path) {
             close(fd);
             return -2;
         }
-        if (currDir->dir_name[0] == 0x00) { // empty space found. Create the directory
+        if (currDir->dir_name[0] == 0x00 || currDir->dir_name[0] == 0x05) { // empty space found. Create the directory
             int freeClusterNum = findFreeCluster(bs);
             int currCluster = clusterNum;
             if (readingRoot) {
@@ -131,6 +131,65 @@ int OS_rm(const char *path) {
 }
 
 int OS_creat(const char *path) {
+    // get boot sector
+    void * boot_sector[sizeof(fat_BS_t)];
+    getBootSector(boot_sector);
+    fat_BS_t* bs = (fat_BS_t *) boot_sector;
+
+    char* fileParts[2];
+    splitFilePath(fileParts, path);
+    char* dirpath = getAbsolutePath(fileParts[0]);
+    int fd = traverseDirectories(dirpath, bs);
+    if (fd == -1) {
+        close(fd);
+        return -1;
+    }
+
+    unsigned int currByteAddress = (unsigned int) lseek(fd, 0, SEEK_CUR);
+
+    // CHECK IF IN ROOT OR NOT
+    int readingRoot = 0;
+    if (currByteAddress >= getFirstRootDirSecNum(bs) * bs->bytes_per_sector &&
+        currByteAddress < getFirstDataSector(bs)* bs->bytes_per_sector) {
+            readingRoot = 1;
+    }
+
+    // loop through directory entries
+    int bytes_read = 0;
+    unsigned int bytes_per_cluster = getBytesPerCluster(bs);
+    void *currDirSpace[sizeof(dirEnt)];
+    while (1) {
+        // break if read past cluster
+        if ((readingRoot && bytes_read >= bs->root_entry_count) || (!readingRoot && bytes_read >= bytes_per_cluster)) {
+            close(fd);
+            return -1;
+        }
+
+        read(fd, currDirSpace, sizeof(dirEnt));
+        dirEnt* currDir = (dirEnt*) currDirSpace;
+        char dir_name[12];
+        char path_dir_name[12];
+        fixStrings(dir_name, (char *) currDir->dir_name);
+        toShortName(path_dir_name, fileParts[1]);
+        if (strcmp(path_dir_name, dir_name) == 0 && currDir->dir_attr != 0x10) {
+            close(fd);
+            return -2;
+        }
+        if (currDir->dir_name[0] == 0x00 || currDir->dir_name[0] == 0x05) { // empty space found. Create the directory
+            int freeClusterNum = findFreeCluster(bs);
+            // write dirEnt for this new dir:
+            // seek back to beginning of this dirEntry
+            lseek(fd, -sizeof(dirEnt), SEEK_CUR);
+            writeDirEnt(fd, (unsigned char *) path_dir_name, 0x20, (unsigned short) freeClusterNum, 0);
+            // set fat value
+            setFatValue(freeClusterNum, 0xFFFF, bs);
+
+            close(fd);
+            return 1;
+        }
+        bytes_read += sizeof(dirEnt);
+    }
+    close(fd);
     return -1;
 }
 
@@ -601,7 +660,6 @@ unsigned int byteAddressToClusterNum(unsigned int byte_address, fat_BS_t* bs) {
 void writeDirEnt(int fd, unsigned char* name, unsigned char attr, unsigned short clusLo, unsigned int fileSize) {
     unsigned char NTres = 0;
     unsigned short zero = 0;
-    unsigned int currByteAddress = (unsigned int) lseek(fd, 0, SEEK_CUR);
     write(fd, name, 11);       // name
     write(fd, &attr, 1);        // file attr
     write(fd, &NTres, 1);       // NTRes
