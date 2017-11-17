@@ -42,3 +42,9 @@ int OS_open(const char *path);
 int OS_close(int fd);
 int OS_read(int fildes, void *buf, int nbyte, int offset);
 dirEnt *OS_readDir(const char *dirname);
+
+int OS_mkdir(const char *path);
+int OS_rmdir(const char *path);
+int OS_rm(const char *path);
+int OS_creat(const char *path);
+int OS_write(int fildes, const void *buf, int nbytes, int offset);

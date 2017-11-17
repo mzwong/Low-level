@@ -5,4 +5,4 @@ app:
   tty: true
   privileged: true
   environment:
-    - FAT_FS_PATH=/home/student/3_4_fat/sampledisk16.raw
+    - FAT_FS_PATH=/home/student/4_fat_write/sampledisk16.raw
