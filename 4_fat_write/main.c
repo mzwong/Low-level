@@ -194,7 +194,74 @@ int OS_creat(const char *path) {
 }
 
 int OS_write(int fildes, const void *buf, int nbytes, int offset) {
-    return -1;
+    // get boot sector
+    void * boot_sector[sizeof(fat_BS_t)];
+    getBootSector(boot_sector);
+    fat_BS_t* bs = (fat_BS_t *) boot_sector;
+
+    // move real file descriptor to the correct place:
+    unsigned int clusterNum = (unsigned int) fd_table[fildes];
+    unsigned int firstSectorOfCluster = getFirstSectorOfCluster(clusterNum, bs);
+    int real_fd = openFileSystem();
+    lseek(real_fd, firstSectorOfCluster * bs->bytes_per_sector, SEEK_SET);
+
+    // seek to offset
+    unsigned int bytes_to_offset = offset;
+    unsigned int bytes_write_from_curr_cluster = 0;
+    while (1) {
+        if (bytes_to_offset > getBytesPerCluster(bs)) {
+            // advance cluster chain:
+            clusterNum = getFatValue(clusterNum, bs);
+            if (isEndOfClusterChain(clusterNum)) {
+                // need to allocate more clusters to move the offset:
+                unsigned int freeClusterNum = findFreeCluster(bs);
+                setFatValue((unsigned short) clusterNum, (unsigned short) freeClusterNum, bs);
+                setFatValue((unsigned short) freeClusterNum, 0xFFFF, bs);
+                clusterNum = freeClusterNum;
+            }
+            bytes_to_offset -= getBytesPerCluster(bs);
+        } else {
+            seekFirstSectorOfCluster(clusterNum, &real_fd, bs);
+            lseek(real_fd, bytes_to_offset, SEEK_CUR);
+            bytes_write_from_curr_cluster = bytes_to_offset;
+            break;
+        }
+    }
+    unsigned int bytes_write_total = 0;
+
+    while (bytes_write_total < nbytes) {
+        int fat_value = getFatValue(clusterNum, bs);
+        int remaining_bytes_in_cluster = getBytesPerCluster(bs) - bytes_write_from_curr_cluster;
+        int remaining_bytes_total = nbytes - bytes_write_total;
+
+        if (remaining_bytes_in_cluster < remaining_bytes_total) { // trying to write the rest of the cluster
+            int bytes_write = write(real_fd, buf, remaining_bytes_in_cluster);
+            if (bytes_write == -1) { // unsuccessful write
+                return -1;
+            } else { // successful write
+                bytes_write_total += bytes_write;
+                buf += bytes_write;
+                if (isEndOfClusterChain(fat_value)) { // trying to write more, but at end of cluster chain. terminate
+                    // allocate another cluster block
+                    unsigned int freeClusterNum = findFreeCluster(bs);
+                    setFatValue((unsigned short) clusterNum, (unsigned short) freeClusterNum, bs);
+                    setFatValue((unsigned short) freeClusterNum, 0xFFFF, bs);
+                    fat_value = freeClusterNum;
+                }
+                // advance cluster chain:
+                clusterNum = fat_value;
+                seekFirstSectorOfCluster(clusterNum, &real_fd, bs);
+                bytes_write_from_curr_cluster = 0;
+                continue;
+            }
+        } else { // not writeing past the current cluster
+            int bytes_write = write(real_fd, buf, remaining_bytes_total);
+            bytes_write_total += bytes_write;
+            break;
+        }
+    }
+    close(real_fd);
+    return bytes_write_total;
 }
 
 ///////////////////// READ API ///////////////////////////
