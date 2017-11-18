@@ -9,4 +9,7 @@
 *.raw
 2_bash/max
 
-3_4_fat/test
+3_fat_read/test
+
+4_fat_write/test
+*.jpg

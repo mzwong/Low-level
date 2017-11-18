@@ -26,7 +26,7 @@ static char* cwd = "/"; // file path to the current working directory. Ends with
 static unsigned short fd_table[128]; // file descriptor table tracks beginning clus no of file
 
 //PRIVATE FUNCTION DECLARATIONS
-unsigned int findFreeCluster(fat_BS_t* bs);
+unsigned short findFreeCluster(fat_BS_t* bs);
 int traverseDirectories(char* dirname, fat_BS_t* bs);
 int openFileSystem();
 void getBootSector(void * boot_sector);
@@ -211,11 +211,12 @@ int OS_write(int fildes, const void *buf, int nbytes, int offset) {
     while (1) {
         if (bytes_to_offset > getBytesPerCluster(bs)) {
             // advance cluster chain:
+            unsigned int prevClusterNum = clusterNum;
             clusterNum = getFatValue(clusterNum, bs);
             if (isEndOfClusterChain(clusterNum)) {
                 // need to allocate more clusters to move the offset:
                 unsigned int freeClusterNum = findFreeCluster(bs);
-                setFatValue((unsigned short) clusterNum, (unsigned short) freeClusterNum, bs);
+                setFatValue((unsigned short) prevClusterNum, (unsigned short) freeClusterNum, bs);
                 setFatValue((unsigned short) freeClusterNum, 0xFFFF, bs);
                 clusterNum = freeClusterNum;
             }
@@ -237,15 +238,17 @@ int OS_write(int fildes, const void *buf, int nbytes, int offset) {
         if (remaining_bytes_in_cluster < remaining_bytes_total) { // trying to write the rest of the cluster
             int bytes_write = write(real_fd, buf, remaining_bytes_in_cluster);
             if (bytes_write == -1) { // unsuccessful write
+                close(real_fd);
                 return -1;
             } else { // successful write
                 bytes_write_total += bytes_write;
                 buf += bytes_write;
                 if (isEndOfClusterChain(fat_value)) { // trying to write more, but at end of cluster chain. terminate
                     // allocate another cluster block
-                    unsigned int freeClusterNum = findFreeCluster(bs);
+                    unsigned freeClusterNum = findFreeCluster(bs);
                     setFatValue((unsigned short) clusterNum, (unsigned short) freeClusterNum, bs);
                     setFatValue((unsigned short) freeClusterNum, 0xFFFF, bs);
+
                     fat_value = freeClusterNum;
                 }
                 // advance cluster chain:
@@ -254,7 +257,7 @@ int OS_write(int fildes, const void *buf, int nbytes, int offset) {
                 bytes_write_from_curr_cluster = 0;
                 continue;
             }
-        } else { // not writeing past the current cluster
+        } else { // not writing past the current cluster
             int bytes_write = write(real_fd, buf, remaining_bytes_total);
             bytes_write_total += bytes_write;
             break;
@@ -499,15 +502,15 @@ dirEnt* OS_readDir(const char *dirname) {
  * scans the FAT table and returns the int of a free cluster number
  * returns -1 if no free cluster is found
  */
-unsigned int findFreeCluster(fat_BS_t* bs) {
-    unsigned int i = 2;
+unsigned short findFreeCluster(fat_BS_t* bs) {
+    unsigned short i = 2;
     int countOfClusters = getCountOfClusters(bs);
     for (i = 2; i < countOfClusters + 2; i++) {
         if (getFatValue(i, bs) == 0) {
             return i;
         }
     }
-    return -1;
+    return 9999;
 }
 
 
@@ -648,14 +651,14 @@ unsigned int getFirstSectorOfCluster(unsigned int n, fat_BS_t* boot_sector) {
  * Determines the total number of clusters available
  */
 int getCountOfClusters(fat_BS_t* bs) {
-    unsigned int totSec = (unsigned int) bs->total_sectors_16;
+    unsigned int totSec = (unsigned int) bs->total_sectors_32;
     unsigned int fatSz = (unsigned int) bs->table_size_16;
     unsigned int resvdSecCnt = (unsigned int) bs->reserved_sector_count;
     unsigned int secPerCluster = (unsigned int) bs->sectors_per_cluster;
     unsigned int numFats = (unsigned int) bs->table_count;
     unsigned int bytsPerSec = (unsigned int) bs->bytes_per_sector;
     unsigned int rootEntCnt = (unsigned int) bs->root_entry_count;
-    unsigned int rootDirSectors = ((rootEntCnt * 32) + (bytsPerSec) - 1 ) / bytsPerSec;
+    unsigned int rootDirSectors = ((rootEntCnt * 32) + (bytsPerSec - 1)) / bytsPerSec;
     unsigned int dataSec = totSec - (resvdSecCnt + (numFats * fatSz) + rootDirSectors);
     return dataSec / secPerCluster;
 }
@@ -674,6 +677,7 @@ unsigned int getFatValue(unsigned int n, fat_BS_t* boot_sector) {
     lseek(fd, fatSecNum * bytsPerSec, SEEK_SET);
     unsigned char secBuff[bytsPerSec];
     read(fd, secBuff, bytsPerSec);
+    close(fd);
     return (unsigned int) *((short *) &secBuff[fatEntOffset]);
 }
 
