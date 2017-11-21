@@ -503,13 +503,37 @@ dirEnt* OS_readDir(const char *dirname) {
  * returns -1 if no free cluster is found
  */
 unsigned short findFreeCluster(fat_BS_t* bs) {
+    // new code
+    unsigned int resvdSecCnt = (unsigned int) bs->reserved_sector_count;
+    unsigned int bytsPerSec = (unsigned int) bs->bytes_per_sector;
+    int fd = openFileSystem();
+    unsigned char secBuff[bytsPerSec];
     unsigned short i = 2;
+    unsigned int fatOffset = i * 2;
+    unsigned int fatSecNum = resvdSecCnt + (fatOffset / bytsPerSec);
+    unsigned int fatEntOffset = fatOffset % bytsPerSec;
+    unsigned int currFatSecNum = fatSecNum;
+    unsigned short currFatValue;
+    lseek(fd, fatSecNum * bytsPerSec, SEEK_SET);
+    read(fd, secBuff, bytsPerSec);
+
     int countOfClusters = getCountOfClusters(bs);
     for (i = 2; i < countOfClusters + 2; i++) {
-        if (getFatValue(i, bs) == 0) {
+        fatOffset = i * 2;
+        fatSecNum = resvdSecCnt + (fatOffset / bytsPerSec);
+        fatEntOffset = fatOffset % bytsPerSec;
+        if (fatSecNum != currFatSecNum) {
+            lseek(fd, fatSecNum * bytsPerSec, SEEK_SET);
+            read(fd, secBuff, bytsPerSec);
+            currFatSecNum = fatSecNum;
+        }
+        currFatValue = (unsigned short) *((short *) &secBuff[fatEntOffset]);
+        if (currFatValue == 0) {
+            close(fd);
             return i;
         }
     }
+    close(fd);
     return 9999;
 }
 

@@ -45,15 +45,15 @@ int main() {
 
     OS_creat("/people/mzw7af/image.jpg");
     int fd3 = OS_open("/people/mzw7af/image.jpg");
-    bytes_write = OS_write(fd3, buffer2, 500000, 0);
+    bytes_write = OS_write(fd3, buffer2, 300000, 0);
     printf("bytes written %d\n",  bytes_write);
 
     OS_close(fd3);
     fd3 = OS_open("/people/mzw7af/image.jpg");
 
-    char buffer3[500000];
+    char buffer3[300000];
 
-    int bytes_read3 = OS_read(fd3, buffer3, 500000, 0);
+    int bytes_read3 = OS_read(fd3, buffer3, 300000, 0);
     // FILE *fp;
     fp = fopen("mzw7af_fail.jpg", "w+");
 
