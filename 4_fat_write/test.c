@@ -106,5 +106,39 @@ int main() {
         printf("%s\n", directories[i].dir_name);
     }
 
+    ////////////////////////// RM TEST ////////////////////////
+    int fail_rm_invalid_path = OS_rm("/people/asd/sensei.txt");
+    if (fail_rm_invalid_path == -1) {
+        printf("PASS rm - invalid path\n");
+    } else {
+        printf("FAIL rm - invalid path\n");
+    }
+
+    int fail_rm_not_file = OS_rm("/people");
+    if (fail_rm_not_file == -2) {
+        printf("PASS rm - not a file\n");
+    } else {
+        printf("FAIL rm - not a file\n");
+    }
+    directories = OS_readDir("/people/mzw7af");
+
+    // should contain image.txt before removal:
+    for (int i = 0; i < 5; i++) {
+        printf("%s\n", directories[i].dir_name);
+    }
+    int pass_rm_image = OS_rm("/people/mzw7af/sensei.txt");
+    if (pass_rm_image == 1) {
+        printf("PASS rm - image\n");
+    } else {
+        printf("FAIL rm - image\n");
+    }
+    directories = OS_readDir("/people/mzw7af");
+    // should be missing image.txt:
+    for (int i = 0; i < 5; i++) {
+        printf("%s\n", directories[i].dir_name);
+    }
+    OS_creat("/people/ag8t/grim.txt");
+    int fd4 = OS_open("/people/ag8t/grim.txt");
+    OS_write(fd4, buffer2, 300000, 0);
 
 }

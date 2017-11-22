@@ -195,6 +195,69 @@ int OS_rmdir(const char *path) {
 }
 
 int OS_rm(const char *path) {
+    // get boot sector
+    void * boot_sector[sizeof(fat_BS_t)];
+    getBootSector(boot_sector);
+    fat_BS_t* bs = (fat_BS_t *) boot_sector;
+
+    char* fileParts[2];
+    splitFilePath(fileParts, path);
+    char* dirpath = getAbsolutePath(fileParts[0]);
+    int fd = traverseDirectories(dirpath, bs);
+    if (fd == -1) {
+        close(fd);
+        return -1;
+    }
+
+    unsigned int currByteAddress = (unsigned int) lseek(fd, 0, SEEK_CUR);
+
+    // CHECK IF IN ROOT OR NOT
+    int readingRoot = 0;
+    if (currByteAddress >= getFirstRootDirSecNum(bs) * bs->bytes_per_sector &&
+        currByteAddress < getFirstDataSector(bs)* bs->bytes_per_sector) {
+            readingRoot = 1;
+    }
+
+    // loop through directory entries
+    int bytes_read = 0;
+    unsigned int bytes_per_cluster = getBytesPerCluster(bs);
+    void *currDirSpace[sizeof(dirEnt)];
+    while (1) {
+        // break if read past root directory
+        if ((readingRoot && bytes_read >= bs->root_entry_count) || (!readingRoot && bytes_read >= bytes_per_cluster)) {
+            close(fd);
+            return -1;
+        }
+
+        read(fd, currDirSpace, sizeof(dirEnt));
+        dirEnt* currDir = (dirEnt*) currDirSpace;
+        char dir_name[12];
+        char path_dir_name[12];
+        fixStrings(dir_name, (char *) currDir->dir_name);
+        toShortName(path_dir_name, fileParts[1]);
+        if (strcmp(path_dir_name, dir_name) == 0) { // found the directory
+            if (!((currDir->dir_attr & (0x10 | 0x08)) == 0x00)) { // make sure it's a directory
+                close(fd);
+                return -2;
+            }
+            // clear the cluster:
+            clearClusterChain(currDir->dir_fstClusLO, bs);
+            // overwrite the dirEntry space:
+            unsigned char clearDirEnt[sizeof(dirEnt)];
+            memset(clearDirEnt, 0x00, sizeof(dirEnt));
+            clearDirEnt[0] = 0xE5;
+            lseek(fd, -sizeof(dirEnt), SEEK_CUR);
+            write(fd, clearDirEnt, sizeof(dirEnt));
+            close(fd);
+            return 1;
+        }
+        if (currDir->dir_name[0] == 0x00) { // couldn't find file
+            close(fd);
+            return -1;
+        }
+        bytes_read += sizeof(dirEnt);
+    }
+    close(fd);
     return -1;
 }
 
@@ -621,8 +684,9 @@ void clearClusterChain(unsigned short n, fat_BS_t* bs) {
     while (!isEndOfClusterChain(currCluster)) {
         seekFirstSectorOfCluster(currCluster, &fd, bs);
         write(fd, clearBuffer, bytsPerSec); // clear the first cluster
-        currCluster = getFatValue(n, bs);
-        setFatValue(n, 0x0000, bs);
+        unsigned short oldCluster = currCluster;
+        currCluster = getFatValue(currCluster, bs);
+        setFatValue(oldCluster, 0x0000, bs);
     }
     close(fd);
 }
