@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include "main.h"
 
@@ -13,7 +14,7 @@ int main() {
         printf("NULL FOUND YAY\n");
         return 0;
     }
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 10; i++) {
         printf("%s\n", directories[i].dir_name);
     }
     OS_creat("/people/mzw7af/sensei.txt");
@@ -32,12 +33,15 @@ int main() {
     int bytes_write = OS_write(fd, buff, 500, 0);
     char buffer[500000];
     OS_read(fd, buffer, 500000, 0);
-    printf("%s\n", buffer);
-    printf("%d\n", bytes_write);
+    if (strcmp(buff, buffer) == 0) {
+        printf("PASS write - writing just text\n");
+    } else {
+        printf("FAIL write - writing just text\n");
+    }
 
     int fd2 = OS_open("/media/hearse-fail.jpg");
     char buffer2[500000];
-    int bytes_read2 = OS_read(fd2, buffer2, 500000, 0);
+    OS_read(fd2, buffer2, 500000, 0);
 
     FILE *fp;
     fp = fopen("mzw7af_fail.jpg", "w+");
@@ -53,13 +57,54 @@ int main() {
 
     char buffer3[300000];
 
-    int bytes_read3 = OS_read(fd3, buffer3, 300000, 0);
+    OS_read(fd3, buffer3, 300000, 0);
     // FILE *fp;
     fp = fopen("mzw7af_fail.jpg", "w+");
 
-    printf("buf3: %s\n", buffer3);
     fwrite(buffer3, 100000, 1, fp);
     fclose(fp);
+
+    ////////////////// TEST RMDIR ////////////////////////
+    int fail_rmdir_not_empty = OS_rmdir("/media");
+    if (fail_rmdir_not_empty == -3) {
+        printf("PASS rmdir - deleting nonempty dir\n");
+    } else {
+        printf("FAIL rmdir - deleting nonempty dir\n");
+    }
+
+    int fail_rmdir_not_dir = OS_rmdir("/people/ag8t/gate-captain.txt");
+    if (fail_rmdir_not_dir == -2) {
+        printf("PASS rmdir - deleting file not dir\n");
+    } else {
+        printf("FAIL rmdir - deleting file not dir\n");
+    }
+
+    int fail_rmdir_not_dir2 = OS_rmdir("/people/mzw7af/sensei.txt");
+    if (fail_rmdir_not_dir2 == -2) {
+        printf("PASS rmdir - deleting file not dir custom\n");
+    } else {
+        printf("FAIL rmdir - deleting file not dir custom\n");
+    }
+
+    int fail_rmdir_invalid_path = OS_rmdir("/people/asdf");
+    if (fail_rmdir_invalid_path == -1) {
+        printf("PASS rmdir - invalid path\n");
+    } else {
+        printf("FAIL rmdir - invalid path\n");
+    }
+
+    int pass_rmdir_new_dir = OS_rmdir("/new_dir");
+    printf("%d\n", pass_rmdir_new_dir);
+    directories = OS_readDir("/");
+    if (pass_rmdir_new_dir == 1) {
+        printf("PASS rmdir - remove new_dir from root\n");
+    } else {
+        printf("FAIL rmdir - remove new_dir from root\n");
+    }
+    // should be missing new_dir:
+    for (int i = 0; i < 10; i++) {
+        printf("%s\n", directories[i].dir_name);
+    }
 
 
 }
