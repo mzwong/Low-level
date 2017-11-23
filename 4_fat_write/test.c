@@ -6,9 +6,31 @@
 
 int main() {
     system("cat sampledisk16_dup.raw > sampledisk16.raw");
-    OS_mkdir("/new_dir");
-    OS_creat("/new_file");
+
+    /////////////// MKDIR TEST ////////////////////
+    int pass_mkdir_root_dir = OS_mkdir("/new_dir");
+    if (pass_mkdir_root_dir == 1) {
+        printf("PASS mkdir - create dir in root\n");
+    } else {
+        printf("FAIL mkdir - create dir in root\n");
+    }
+
+    int pass_mkdir_nested_dir = OS_mkdir("/people/mzw7af");
+    if (pass_mkdir_nested_dir == 1) {
+        printf("PASS mkdir - create nested dir in root\n");
+    } else {
+        printf("FAIL mkdir - create nested dir in root\n");
+    }
+    int fail_mkdir_dup_dir = OS_mkdir("/new_dir");
+    if (fail_mkdir_dup_dir == -2) {
+        printf("PASS mkdir - create duplicate dir in root\n");
+    } else {
+        printf("fail status: %d\n", fail_mkdir_dup_dir);
+        printf("FAIL mkdir - create duplicate dir in root\n");
+    }
     OS_mkdir("/people/mzw7af");
+
+    OS_creat("/new_file");
     dirEnt* directories = OS_readDir("/");
     if (directories == NULL) {
         printf("NULL FOUND YAY\n");

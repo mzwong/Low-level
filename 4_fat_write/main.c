@@ -92,7 +92,7 @@ int OS_mkdir(const char *path) {
         char path_dir_name[12];
         fixStrings(dir_name, (char *) currDir->dir_name);
         toShortName(path_dir_name, fileParts[1]);
-        if (strcmp(path_dir_name, dir_name) == 0 && currDir->dir_attr != 0x10) {
+        if (strcmp(path_dir_name, dir_name) == 0 && currDir->dir_attr == 0x10) {
             close(fd);
             return -2;
         }
