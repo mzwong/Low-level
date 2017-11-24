@@ -28,9 +28,36 @@ int main() {
         printf("fail status: %d\n", fail_mkdir_dup_dir);
         printf("FAIL mkdir - create duplicate dir in root\n");
     }
-    OS_mkdir("/people/mzw7af");
 
-    OS_creat("/new_file");
+    ///////////// CREAT TEST ////////////////////////
+    int pass_creat_root_new_file = OS_creat("/new_file");
+    if (pass_creat_root_new_file == 1) {
+        printf("PASS creat - create new file in root\n");
+    } else {
+        printf("FAIL creat - create new file in root\n");
+    }
+
+    int pass_creat_nested_new_file = OS_creat("/people/mzw7af/sensei.txt");
+    if (pass_creat_nested_new_file == 1) {
+        printf("PASS creat - create new nested file\n");
+    } else {
+        printf("FAIL creat - create new nested file\n");
+    }
+
+    int fail_creat_nested_dup_file = OS_creat("/people/mzw7af/sensei.txt");
+    if (fail_creat_nested_dup_file == -2) {
+        printf("PASS creat - dup file created\n");
+    } else {
+        printf("FAIL creat - dup file created\n");
+    }
+
+    int fail_creat_invalid_file = OS_creat("/people/mzasdf/sensei.txt");
+    if (fail_creat_invalid_file == -1) {
+        printf("PASS creat - invalid file created\n");
+    } else {
+        printf("FAIL creat - invalid file created\n");
+    }
+
     dirEnt* directories = OS_readDir("/");
     if (directories == NULL) {
         printf("NULL FOUND YAY\n");
@@ -39,7 +66,6 @@ int main() {
     for (int i = 0; i < 10; i++) {
         printf("%s\n", directories[i].dir_name);
     }
-    OS_creat("/people/mzw7af/sensei.txt");
     directories = OS_readDir("/people/mzw7af");
     if (directories == NULL) {
         printf("NULL FOUND YAY\n");
@@ -59,6 +85,14 @@ int main() {
         printf("PASS write - writing just text\n");
     } else {
         printf("FAIL write - writing just text\n");
+    }
+    OS_write(fd, buff, 500, 10);
+    OS_read(fd, buffer, 500000, 0);
+    char* newSensei = "sensei is sensei is the best why are you so good at programming\n fill all the cups with knowledge";
+    if (strcmp(newSensei, buffer) == 0) {
+        printf("PASS write - writing just text at offset\n");
+    } else {
+        printf("FAIL write - writing just text at offset\n");
     }
 
     int fd2 = OS_open("/media/hearse-fail.jpg");
@@ -162,5 +196,25 @@ int main() {
     OS_creat("/people/ag8t/grim.txt");
     int fd4 = OS_open("/people/ag8t/grim.txt");
     OS_write(fd4, buffer2, 300000, 0);
+
+
+    //////////// INtegration test /////////////
+    int fail_mkdir_blank_space_dup_name = OS_mkdir("/new_file");
+    if (fail_mkdir_blank_space_dup_name == -2) {
+        printf("PASS mkdir - skipped blank space and found dup name\n");
+    } else {
+        printf("STATUS: %d\n", fail_mkdir_blank_space_dup_name);
+        printf("FAIL mkdir - skipped blank space and found dup name\n");
+
+    }
+
+    int fail_creat_blank_space_file = OS_creat("/people/mzw7af/image.jpg");
+    if (fail_creat_blank_space_file == -2) {
+        printf("PASS creat - skipped blank space and found dup name\n");
+    } else {
+        printf("STATUS asd: %d\n", fail_creat_blank_space_file);
+        printf("FAIL creat - skipped blank space and found dup name\n");
+
+    }
 
 }

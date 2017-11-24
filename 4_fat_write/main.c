@@ -79,6 +79,7 @@ int OS_mkdir(const char *path) {
     unsigned int bytes_per_cluster = getBytesPerCluster(bs);
     void *currDirSpace[sizeof(dirEnt)];
     int clusterNum = byteAddressToClusterNum(currByteAddress, bs);
+    // check for duplicate names
     while (1) {
         // break if read past root directory
         if ((readingRoot && bytes_read >= bs->root_entry_count) || (!readingRoot && bytes_read >= bytes_per_cluster)) {
@@ -92,10 +93,26 @@ int OS_mkdir(const char *path) {
         char path_dir_name[12];
         fixStrings(dir_name, (char *) currDir->dir_name);
         toShortName(path_dir_name, fileParts[1]);
-        if (strcmp(path_dir_name, dir_name) == 0 && currDir->dir_attr == 0x10) {
+        if (strcmp(path_dir_name, dir_name) == 0) {
             close(fd);
             return -2;
         }
+        if (currDir->dir_name[0] == 0x00) {
+            break;
+        }
+
+        bytes_read += sizeof(dirEnt);
+    }
+    // no duplicate name found. Scan back to beginning of directory and look for first empty space
+    lseek(fd, currByteAddress, SEEK_SET);
+    while (1) {
+        read(fd, currDirSpace, sizeof(dirEnt));
+        dirEnt* currDir = (dirEnt*) currDirSpace;
+        char dir_name[12];
+        char path_dir_name[12];
+        fixStrings(dir_name, (char *) currDir->dir_name);
+        toShortName(path_dir_name, fileParts[1]);
+
         if (currDir->dir_name[0] == 0x00 || currDir->dir_name[0] == 0xE5) { // empty space found. Create the directory
             int freeClusterNum = findFreeCluster(bs);
             int currCluster = clusterNum;
@@ -117,7 +134,6 @@ int OS_mkdir(const char *path) {
             close(fd);
             return 1;
         }
-        bytes_read += sizeof(dirEnt);
     }
     close(fd);
     return -1;
@@ -302,10 +318,23 @@ int OS_creat(const char *path) {
         char path_dir_name[12];
         fixStrings(dir_name, (char *) currDir->dir_name);
         toShortName(path_dir_name, fileParts[1]);
-        if (strcmp(path_dir_name, dir_name) == 0 && currDir->dir_attr != 0x10) {
+        if (strcmp(path_dir_name, dir_name) == 0) {
             close(fd);
             return -2;
         }
+        if (currDir->dir_name[0] == 0x00) {
+            break;
+        }
+        bytes_read += sizeof(dirEnt);
+    }
+    lseek(fd, currByteAddress, SEEK_SET);
+    while (1) {
+        read(fd, currDirSpace, sizeof(dirEnt));
+        dirEnt* currDir = (dirEnt*) currDirSpace;
+        char dir_name[12];
+        char path_dir_name[12];
+        fixStrings(dir_name, (char *) currDir->dir_name);
+        toShortName(path_dir_name, fileParts[1]);
         if (currDir->dir_name[0] == 0x00 || currDir->dir_name[0] == 0xE5) { // empty space found. Create the directory
             int freeClusterNum = findFreeCluster(bs);
             // write dirEnt for this new dir:
@@ -318,7 +347,6 @@ int OS_creat(const char *path) {
             close(fd);
             return 1;
         }
-        bytes_read += sizeof(dirEnt);
     }
     close(fd);
     return -1;
