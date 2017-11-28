@@ -6,7 +6,7 @@
 
 int main() {
     system("cat sampledisk16_dup.raw > sampledisk16.raw");
-
+    int i = 0;
     /////////////// MKDIR TEST ////////////////////
     int pass_mkdir_root_dir = OS_mkdir("/new_dir");
     if (pass_mkdir_root_dir == 1) {
@@ -63,7 +63,7 @@ int main() {
         printf("NULL FOUND YAY\n");
         return 0;
     }
-    for (int i = 0; i < 10; i++) {
+    for (i = 0; i < 10; i++) {
         printf("%s\n", directories[i].dir_name);
     }
     directories = OS_readDir("/people/mzw7af");
@@ -71,7 +71,7 @@ int main() {
         printf("NULL FOUND YAY\n");
         return 0;
     }
-    for (int i = 0; i < 5; i++) {
+    for (i = 0; i < 5; i++) {
         printf("%s\n", directories[i].dir_name);
     }
 
@@ -158,7 +158,7 @@ int main() {
         printf("FAIL rmdir - remove new_dir from root\n");
     }
     // should be missing new_dir:
-    for (int i = 0; i < 10; i++) {
+    for (i = 0; i < 10; i++) {
         printf("%s\n", directories[i].dir_name);
     }
 
@@ -179,7 +179,7 @@ int main() {
     directories = OS_readDir("/people/mzw7af");
 
     // should contain image.txt before removal:
-    for (int i = 0; i < 5; i++) {
+    for (i = 0; i < 5; i++) {
         printf("%s\n", directories[i].dir_name);
     }
     int pass_rm_image = OS_rm("/people/mzw7af/sensei.txt");
@@ -190,7 +190,7 @@ int main() {
     }
     directories = OS_readDir("/people/mzw7af");
     // should be missing image.txt:
-    for (int i = 0; i < 5; i++) {
+    for (i = 0; i < 5; i++) {
         printf("%s\n", directories[i].dir_name);
     }
     OS_creat("/people/ag8t/grim.txt");
@@ -216,5 +216,5 @@ int main() {
         printf("FAIL creat - skipped blank space and found dup name\n");
 
     }
-
+    return 0;
 }
