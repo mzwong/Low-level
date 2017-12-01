@@ -121,16 +121,16 @@ void performOps(int ConnectFD, int control_port) {
         upperCaseString(command);
         printf("%s\n", command);
         // SWITCH BASED ON WHAT COMMAND IS RECEIVED
-        if (strcmp(command, "USER") == 0) {
+        if (strcmp(command, "USER") == 0) { // USER
             printf("USER reached\n");
             char* undefined_command = "230 User logged in, proceed.\r\n";
             send(ConnectFD, undefined_command, strlen(undefined_command), 0);
-        } else if (strcmp(command, "QUIT") == 0) {
+        } else if (strcmp(command, "QUIT") == 0) { // QUIT
             printf("QUIT reached\n");
             char* quit_command = "221 Service closing control connection.\r\n";
             send(ConnectFD, quit_command, strlen(quit_command), 0);
             break;
-        } else if (strcmp(command, "PORT") == 0) {
+        } else if (strcmp(command, "PORT") == 0) { // PORT
             int i = 0;
             char address[20];
             int address_len = 0;
@@ -152,20 +152,27 @@ void performOps(int ConnectFD, int control_port) {
                 char* port_failure = "500 PORT not established.\r\n";
                 send(ConnectFD, port_failure, strlen(port_failure), 0);
             }
-        } else if (strcmp(command, "TYPE") == 0) {
-        } else if (strcmp(command, "MODE") == 0) {
-        } else if (strcmp(command, "STRU") == 0) {
-        } else if (strcmp(command, "RETR") == 0) {
-        } else if (strcmp(command, "STOR") == 0) {
-        } else if (strcmp(command, "NOOP") == 0) {
+        } else if (strcmp(command, "TYPE") == 0) { // TYPE
+        } else if (strcmp(command, "MODE") == 0) { // MODE
+        } else if (strcmp(command, "STRU") == 0) { // STRU
+        } else if (strcmp(command, "RETR") == 0) { // RETR
+        } else if (strcmp(command, "STOR") == 0) { // STOR
+        } else if (strcmp(command, "NOOP") == 0) { // NOOP
             printf("NOOP reached\n");
             char* noop_command = "200 Command okay.\r\n";
             send(ConnectFD, noop_command, strlen(noop_command), 0);
-        } else if (strcmp(command, "LIST") == 0) {
+        } else if (strcmp(command, "LIST") == 0) { // LIST
+            char ls_command[1000];
+            strcpy(ls_command, "/bin/ls -l ");
+            char* pathname = strtok(NULL, " \n\r");
+            if (pathname != NULL) {
+                strcat(ls_command, pathname);
+            }
+            printf("ls command: %s\n", ls_command);
             char* data_connection = "150 Data connection established.\r\n";
             send(ConnectFD, data_connection, strlen(data_connection), 0);
             FILE *fp;
-            fp = popen("/bin/ls -l", "r");
+            fp = popen(ls_command, "r");
             char ls_content[10000];
             while (fgets(ls_content, 10000, fp) != NULL) {
                 write(dataSocketFD, ls_content, strlen(ls_content));
