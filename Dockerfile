@@ -14,6 +14,7 @@ RUN apt-get update && \
         software-properties-common \
         sudo \
         wget \
-        build-essential
+        build-essential \
+        ftp
 
 WORKDIR /home/student

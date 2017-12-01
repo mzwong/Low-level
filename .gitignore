@@ -13,3 +13,5 @@
 
 4_fat_write/test
 *.jpg
+
+5_ftp/my_ftpd
