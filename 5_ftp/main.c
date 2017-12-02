@@ -1,16 +1,16 @@
 /**
- * Homework 2: Parallel, binary max function
+ * Homework 5: Barebones FTP Server
  *
  * CS4414 Operating Systems
  * Fall 2017
  *
  * Maurice Wong - mzw7af
  *
- * main.c - max function program
+ * main.c - FTP server program
  *
  * COMPILE:     make
  * OBJECTS:     main.o
- * RUN:         ./max
+ * RUN:         ./my_ftpd
  */
 
 #include <sys/types.h>
