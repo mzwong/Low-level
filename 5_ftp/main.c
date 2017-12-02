@@ -177,11 +177,17 @@ void performOps(int ConnectFD, int control_port) {
             while (fgets(ls_content, 10000, fp) != NULL) {
                 write(dataSocketFD, ls_content, strlen(ls_content));
             }
-            pclose(fp);
+            int exit_status = WEXITSTATUS(pclose(fp));
             shutdown(dataSocketFD, SHUT_RDWR);
             close(dataSocketFD);
-            char* transfer_done = "226 Transfer Complete.\r\n";
-            send(ConnectFD, transfer_done, strlen(transfer_done), 0);
+            if (exit_status == 0) {
+                char* transfer_done = "226 Transfer Complete.\r\n";
+                send(ConnectFD, transfer_done, strlen(transfer_done), 0);
+            } else {
+                char* transfer_done = "501 ls pathname invalid.\r\n";
+                send(ConnectFD, transfer_done, strlen(transfer_done), 0);
+            }
+
         } else { // unsupported commands
             printf("Unsupported command reached\n");
             char* undefined_command = "500 Syntax error, command unrecognized.\r\n";
