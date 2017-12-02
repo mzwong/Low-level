@@ -153,6 +153,14 @@ void performOps(int ConnectFD, int control_port) {
                 send(ConnectFD, port_failure, strlen(port_failure), 0);
             }
         } else if (strcmp(command, "TYPE") == 0) { // TYPE
+            char* type = strtok(NULL, " \n\r");
+            if (type != NULL && strcmp(type, "I") == 0) {
+                char* type_image = "200 Switching to Image type.\r\n";
+                send(ConnectFD, type_image, strlen(type_image), 0);
+            } else {
+                char* type_image = "504 Command not implemented for that parameter.\r\n";
+                send(ConnectFD, type_image, strlen(type_image), 0);
+            }
         } else if (strcmp(command, "MODE") == 0) { // MODE
         } else if (strcmp(command, "STRU") == 0) { // STRU
         } else if (strcmp(command, "RETR") == 0) { // RETR
