@@ -162,9 +162,71 @@ void performOps(int ConnectFD, int control_port) {
                 send(ConnectFD, type_image, strlen(type_image), 0);
             }
         } else if (strcmp(command, "MODE") == 0) { // MODE
+            char* type = strtok(NULL, " \n\r");
+            if (type != NULL && strcmp(type, "S") == 0) {
+                char* stream_mode = "200 Switching to Stream mode.\r\n";
+                send(ConnectFD, stream_mode, strlen(stream_mode), 0);
+            } else {
+                char* stream_mode = "504 Command not implemented for that parameter.\r\n";
+                send(ConnectFD, stream_mode, strlen(stream_mode), 0);
+            }
         } else if (strcmp(command, "STRU") == 0) { // STRU
+            char* type = strtok(NULL, " \n\r");
+            if (type != NULL && strcmp(type, "F") == 0) {
+                char* file_mode = "200 Switching to File mode.\r\n";
+                send(ConnectFD, file_mode, strlen(file_mode), 0);
+            } else {
+                char* file_mode = "504 Command not implemented for that parameter.\r\n";
+                send(ConnectFD, file_mode, strlen(file_mode), 0);
+            }
         } else if (strcmp(command, "RETR") == 0) { // RETR
+            char* data_connection = "150 Data connection established.\r\n";
+            send(ConnectFD, data_connection, strlen(data_connection), 0);
+            char* pathname = strtok(NULL, " \n\r");
+            if (pathname == NULL) {
+                char* transfer_done = "501 ls pathname invalid.\r\n";
+                send(ConnectFD, transfer_done, strlen(transfer_done), 0);
+            }
+            FILE *fp;
+            fp = fopen(pathname, "r");
+            if (fp == NULL) {
+                char* transfer_done = "501 ls pathname invalid.\r\n";
+                send(ConnectFD, transfer_done, strlen(transfer_done), 0);
+            }
+            char content[100000];
+            while (fgets(content, 100000, fp) != NULL) {
+                write(dataSocketFD, content, strlen(content));
+            }
+            fclose(fp);
+            shutdown(dataSocketFD, SHUT_RDWR);
+            close(dataSocketFD);
+            char* transfer_done = "226 Transfer Complete.\r\n";
+            send(ConnectFD, transfer_done, strlen(transfer_done), 0);
         } else if (strcmp(command, "STOR") == 0) { // STOR
+            char* data_connection = "150 Data connection established.\r\n";
+            send(ConnectFD, data_connection, strlen(data_connection), 0);
+            char* pathname = strtok(NULL, " \n\r");
+            if (pathname == NULL) {
+                char* transfer_done = "501 ls pathname invalid.\r\n";
+                send(ConnectFD, transfer_done, strlen(transfer_done), 0);
+            }
+            FILE *fp;
+            fp = fopen(pathname, "w");
+            if (fp == NULL) {
+                char* transfer_done = "501 ls pathname invalid.\r\n";
+                send(ConnectFD, transfer_done, strlen(transfer_done), 0);
+            }
+            char content[100000];
+            int bytes_read;
+            do {
+                bytes_read = read(dataSocketFD, content, 10000);
+                fwrite(content, 1, bytes_read, fp);
+            } while(bytes_read != 0);
+            fclose(fp);
+            shutdown(dataSocketFD, SHUT_RDWR);
+            close(dataSocketFD);
+            char* transfer_done = "226 Transfer Complete.\r\n";
+            send(ConnectFD, transfer_done, strlen(transfer_done), 0);
         } else if (strcmp(command, "NOOP") == 0) { // NOOP
             printf("NOOP reached\n");
             char* noop_command = "200 Command okay.\r\n";
