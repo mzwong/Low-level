@@ -109,6 +109,7 @@ void performOps(int ConnectFD, int control_port) {
     char full_command[full_command_len];
     char* command;
     int dataSocketFD;
+    int binaryMode = 0;
     for (;;) {
         memset(full_command, '\0', full_command_len);
         int recv_status = recv(ConnectFD, full_command, full_command_len, 0);
@@ -155,6 +156,7 @@ void performOps(int ConnectFD, int control_port) {
         } else if (strcmp(command, "TYPE") == 0) { // TYPE
             char* type = strtok(NULL, " \n\r");
             if (type != NULL && strcmp(type, "I") == 0) {
+                binaryMode = 1;
                 char* type_image = "200 Switching to Image type.\r\n";
                 send(ConnectFD, type_image, strlen(type_image), 0);
             } else {
@@ -180,6 +182,11 @@ void performOps(int ConnectFD, int control_port) {
                 send(ConnectFD, file_mode, strlen(file_mode), 0);
             }
         } else if (strcmp(command, "RETR") == 0) { // RETR
+            if (!binaryMode) {
+                char* non_binary = "451 Requested action aborted: local error in processing\r\n";
+                send(ConnectFD, non_binary, strlen(non_binary), 0);
+                continue;
+            }
             char* data_connection = "150 Data connection established.\r\n";
             send(ConnectFD, data_connection, strlen(data_connection), 0);
             char* pathname = strtok(NULL, " \n\r");
@@ -203,6 +210,11 @@ void performOps(int ConnectFD, int control_port) {
             char* transfer_done = "226 Transfer Complete.\r\n";
             send(ConnectFD, transfer_done, strlen(transfer_done), 0);
         } else if (strcmp(command, "STOR") == 0) { // STOR
+            if (!binaryMode) { //TODO FIX THE CONNECTION OPENING??????
+                char* non_binary = "451 Requested action aborted: local error in processing\r\n";
+                send(ConnectFD, non_binary, strlen(non_binary), 0);
+                continue;
+            }
             char* data_connection = "150 Data connection established.\r\n";
             send(ConnectFD, data_connection, strlen(data_connection), 0);
             char* pathname = strtok(NULL, " \n\r");
