@@ -74,7 +74,6 @@ int openSocket(int port, char* address) {
     if (SocketFD == -1) {
         return -1;
     }
-
     memset(&sa, 0, sizeof sa);
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
@@ -108,26 +107,23 @@ void performOps(int ConnectFD, int control_port) {
     int full_command_len = 10000;
     char full_command[full_command_len];
     char* command;
-    int dataSocketFD;
+    char* dataSocket_addr;
+    int dataSocket_port;
     int binaryMode = 0;
+    // listen for user commands
     for (;;) {
         memset(full_command, '\0', full_command_len);
         int recv_status = recv(ConnectFD, full_command, full_command_len, 0);
         if (recv_status <= 0) { // error receiving message or shutdown
             break;
         }
-        printf("recv status %d\n", recv_status);
-        printf("full command: %s\n", full_command);
         command = strtok(full_command, " \n\r");
         upperCaseString(command);
-        printf("%s\n", command);
         // SWITCH BASED ON WHAT COMMAND IS RECEIVED
         if (strcmp(command, "USER") == 0) { // USER
-            printf("USER reached\n");
             char* undefined_command = "230 User logged in, proceed.\r\n";
             send(ConnectFD, undefined_command, strlen(undefined_command), 0);
         } else if (strcmp(command, "QUIT") == 0) { // QUIT
-            printf("QUIT reached\n");
             char* quit_command = "221 Service closing control connection.\r\n";
             send(ConnectFD, quit_command, strlen(quit_command), 0);
             break;
@@ -137,6 +133,10 @@ void performOps(int ConnectFD, int control_port) {
             int address_len = 0;
             for (i = 0; i < 4; i++) { // ip address
                 char* temp = strtok(NULL, ",");
+                if (temp == NULL) {
+                    char* port_failure = "500 PORT not received.\r\n";
+                    send(ConnectFD, port_failure, strlen(port_failure), 0);
+                }
                 strcpy(address + address_len, temp);
                 address_len += strlen(temp) + 1;
                 address[address_len-1] = '.';
@@ -144,15 +144,11 @@ void performOps(int ConnectFD, int control_port) {
             address[address_len-1] = '\0';
             int p1 = atoi(strtok(NULL, ","));
             int p2 = atoi(strtok(NULL, ","));
-            int portNum = (p1 << 8) | p2;
-            dataSocketFD = openSocket(portNum, address);
-            if (dataSocketFD >= 0) {
-                char* port_success = "200 PORT established.\r\n";
-                send(ConnectFD, port_success, strlen(port_success), 0);
-            } else {
-                char* port_failure = "500 PORT not established.\r\n";
-                send(ConnectFD, port_failure, strlen(port_failure), 0);
-            }
+            int portNum = (p1 << 8) | p2; // combine p1 and p2 to form port number
+            dataSocket_addr = address;
+            dataSocket_port = portNum;
+            char* port_success = "200 PORT established.\r\n";
+            send(ConnectFD, port_success, strlen(port_success), 0);
         } else if (strcmp(command, "TYPE") == 0) { // TYPE
             char* type = strtok(NULL, " \n\r");
             if (type != NULL && strcmp(type, "I") == 0) {
@@ -182,22 +178,33 @@ void performOps(int ConnectFD, int control_port) {
                 send(ConnectFD, file_mode, strlen(file_mode), 0);
             }
         } else if (strcmp(command, "RETR") == 0) { // RETR
-            if (!binaryMode) {
+            if (!binaryMode) { // CHECK IF IN BINARY MODE
                 char* non_binary = "451 Requested action aborted: local error in processing\r\n";
                 send(ConnectFD, non_binary, strlen(non_binary), 0);
                 continue;
             }
-            char* data_connection = "150 Data connection established.\r\n";
-            send(ConnectFD, data_connection, strlen(data_connection), 0);
+            // OPEN DATA CONNECTION
+            int dataSocketFD = openSocket(dataSocket_port, dataSocket_addr);
+            if (dataSocketFD >= 0) {
+                char* data_connection = "150 Data connection established.\r\n";
+                send(ConnectFD, data_connection, strlen(data_connection), 0);
+            } else {
+                char* data_connection = "425 Can't open data connection.\r\n";
+                send(ConnectFD, data_connection, strlen(data_connection), 0);
+                shutdown(dataSocketFD, SHUT_RDWR);
+                close(dataSocketFD);
+                continue;
+            }
+            // READ FROM FILE AND WRITE TO DATA SOCKET
             char* pathname = strtok(NULL, " \n\r");
             if (pathname == NULL) {
-                char* transfer_done = "501 ls pathname invalid.\r\n";
+                char* transfer_done = "501 pathname invalid.\r\n";
                 send(ConnectFD, transfer_done, strlen(transfer_done), 0);
             }
             FILE *fp;
             fp = fopen(pathname, "r");
             if (fp == NULL) {
-                char* transfer_done = "501 ls pathname invalid.\r\n";
+                char* transfer_done = "501 pathname invalid.\r\n";
                 send(ConnectFD, transfer_done, strlen(transfer_done), 0);
             }
             char content[100000];
@@ -210,24 +217,35 @@ void performOps(int ConnectFD, int control_port) {
             char* transfer_done = "226 Transfer Complete.\r\n";
             send(ConnectFD, transfer_done, strlen(transfer_done), 0);
         } else if (strcmp(command, "STOR") == 0) { // STOR
-            if (!binaryMode) { //TODO FIX THE CONNECTION OPENING??????
+            if (!binaryMode) { // CHECK FOR BINARY MODE
                 char* non_binary = "451 Requested action aborted: local error in processing\r\n";
                 send(ConnectFD, non_binary, strlen(non_binary), 0);
                 continue;
             }
-            char* data_connection = "150 Data connection established.\r\n";
-            send(ConnectFD, data_connection, strlen(data_connection), 0);
+            // OPEN DATA SOCKET CONNECTION
+            int dataSocketFD = openSocket(dataSocket_port, dataSocket_addr);
+            if (dataSocketFD >= 0) {
+                char* data_connection = "150 Data connection established.\r\n";
+                send(ConnectFD, data_connection, strlen(data_connection), 0);
+            } else {
+                char* data_connection = "425 Can't open data connection.\r\n";
+                send(ConnectFD, data_connection, strlen(data_connection), 0);
+                shutdown(dataSocketFD, SHUT_RDWR);
+                close(dataSocketFD);
+                continue;
+            }
             char* pathname = strtok(NULL, " \n\r");
             if (pathname == NULL) {
-                char* transfer_done = "501 ls pathname invalid.\r\n";
+                char* transfer_done = "501 pathname invalid.\r\n";
                 send(ConnectFD, transfer_done, strlen(transfer_done), 0);
             }
             FILE *fp;
             fp = fopen(pathname, "w");
             if (fp == NULL) {
-                char* transfer_done = "501 ls pathname invalid.\r\n";
+                char* transfer_done = "501 pathname invalid.\r\n";
                 send(ConnectFD, transfer_done, strlen(transfer_done), 0);
             }
+            // READ DATA FROM SOCKET AND WRITE TO LOCAL FILE
             char content[100000];
             int bytes_read;
             do {
@@ -240,7 +258,6 @@ void performOps(int ConnectFD, int control_port) {
             char* transfer_done = "226 Transfer Complete.\r\n";
             send(ConnectFD, transfer_done, strlen(transfer_done), 0);
         } else if (strcmp(command, "NOOP") == 0) { // NOOP
-            printf("NOOP reached\n");
             char* noop_command = "200 Command okay.\r\n";
             send(ConnectFD, noop_command, strlen(noop_command), 0);
         } else if (strcmp(command, "LIST") == 0) { // LIST
@@ -250,10 +267,20 @@ void performOps(int ConnectFD, int control_port) {
             if (pathname != NULL) {
                 strcat(ls_command, pathname);
             }
-            printf("ls command: %s\n", ls_command);
-            char* data_connection = "150 Data connection established.\r\n";
-            send(ConnectFD, data_connection, strlen(data_connection), 0);
+            // OPEN DATA SOCKET CONNECTION
+            int dataSocketFD = openSocket(dataSocket_port, dataSocket_addr);
+            if (dataSocketFD >= 0) {
+                char* data_connection = "150 Data connection established.\r\n";
+                send(ConnectFD, data_connection, strlen(data_connection), 0);
+            } else {
+                char* data_connection = "425 Can't open data connection.\r\n";
+                send(ConnectFD, data_connection, strlen(data_connection), 0);
+                shutdown(dataSocketFD, SHUT_RDWR);
+                close(dataSocketFD);
+                continue;
+            }
             FILE *fp;
+            // RUN LS -L COMMAND AND WRITE TO DATA SOCKET
             fp = popen(ls_command, "r");
             char ls_content[10000];
             while (fgets(ls_content, 10000, fp) != NULL) {
@@ -271,7 +298,6 @@ void performOps(int ConnectFD, int control_port) {
             }
 
         } else { // unsupported commands
-            printf("Unsupported command reached\n");
             char* undefined_command = "500 Syntax error, command unrecognized.\r\n";
             send(ConnectFD, undefined_command, strlen(undefined_command), 0);
         }
@@ -279,6 +305,9 @@ void performOps(int ConnectFD, int control_port) {
     }
 }
 
+/**
+ * Turn a string into uppercase (used for interpreting comands)
+ */
 void upperCaseString(char* str) {
     while(*str) {
       *str = (toupper(*str));
