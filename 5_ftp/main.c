@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
             close(SocketFD);
             exit(EXIT_FAILURE);
         }
-        char* connection_received = "220 Service ready for new user.\r\n";
+        char* connection_received = "220 my FTP server\r\n";
         send(ConnectFD, connection_received, strlen(connection_received), 0);
         performOps(ConnectFD, atoi(argv[1]));
 

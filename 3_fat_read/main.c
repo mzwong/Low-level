@@ -464,27 +464,27 @@ void fixStrings(char* newString, char* oldString) {
 void toShortName(char* newString, char* oldString) {
     int i = 0;
     int len = strlen(oldString);
-    while (i < 8 && !(oldString[i] == '.' && i == len - 4) && i < len){
+    while (i < len){
         newString[i] = toupper(oldString[i]);
         i += 1;
     }
-    while (i < 8) {
+    while (i < 11) {
         newString[i] = ' ';
         i += 1;
     }
-    if (len - 4 > 0 && oldString[len-4] == '.') {
-        for (i = 0; i < 3; i++) {
-            newString[8+i] = toupper(oldString[len- 3 + i]);
-        }
-    } else {
-        for (i = 8; i < 11; i++) {
-            newString[i] = ' ';
-        }
-    }
-    if (len - 4 > 8) {
-        newString[6] = '~';
-        newString[7] = '1';
-    }
+    // if (len - 4 > 0 && oldString[len-4] == '.') {
+    //     for (i = 0; i < 3; i++) {
+    //         newString[8+i] = toupper(oldString[len- 3 + i]);
+    //     }
+    // } else {
+    //     for (i = 8; i < 11; i++) {
+    //         newString[i] = ' ';
+    //     }
+    // }
+    // if (len - 4 > 8) {
+    //     newString[6] = '~';
+    //     newString[7] = '1';
+    // }
     newString[11] = '\0';
 }
 

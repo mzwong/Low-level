@@ -28,7 +28,8 @@ int main() {
         printf("NULL FOUND YAY\n");
         return 0;
     }
-    for (int i = 0; i < 75; i++) {
+    int i = 0;
+    for (i = 0; i < 75; i++) {
         printf("%s\n", directories[i].dir_name);
     }
 
